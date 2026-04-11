@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "task dev",
+      "type": "shell",
+      "command": "task dev"
+    },
+    {
+      "label": "task test",
+      "type": "shell",
+      "command": "task test"
+    }
+  ]
+}

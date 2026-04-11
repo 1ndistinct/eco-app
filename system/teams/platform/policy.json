@@ -1,0 +1,28 @@
+{
+  "name": "platform-team-default",
+  "description": "Shared validation expectations for platform delivery work.",
+  "phases": [
+    {
+      "name": "test",
+      "description": "Run repo validation after changing application or delivery files when test targets exist.",
+      "required": true,
+      "when": [
+        {
+          "type": "changed_file_matches",
+          "match_any": ["services/app/**", "services/web/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]
+        },
+        {
+          "type": "task_target_exists",
+          "match_any": ["test", "test:backend", "test:frontend", "ci"]
+        }
+      ],
+      "receipts": [
+        {
+          "name": "tests",
+          "type": "command_ran",
+          "match_any": ["task ci", "task test", "task test:backend", "task test:frontend", "go test", "pnpm --dir services/web test", "pnpm test", "vitest", "playwright test"]
+        }
+      ]
+    }
+  ]
+}

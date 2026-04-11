@@ -1,0 +1,44 @@
+{
+  "name": "platform-qa-review",
+  "description": "QA validation phases for deployable application changes.",
+  "phases": [
+    {
+      "name": "deploy",
+      "description": "Run deploy or ci when QA work changes deployable application behavior.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["services/app/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]},
+        {"type": "task_target_exists", "match_any": ["deploy", "ci"]},
+        {"type": "task_target_prefix_exists", "match_any": ["probe:"]}
+      ],
+      "receipts": [
+        {"name": "deploy", "type": "command_ran", "match_any": ["task ci", "task deploy", "tilt ci", "helm upgrade --install", "kubectl apply"]}
+      ]
+    },
+    {
+      "name": "probe",
+      "description": "Probe the deployed application after QA changes.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["services/app/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]},
+        {"type": "task_target_exists", "match_any": ["deploy", "ci"]},
+        {"type": "task_target_prefix_exists", "match_any": ["probe:"]}
+      ],
+      "receipts": [
+        {"name": "probe", "type": "command_ran", "match_any": ["task ci", "task probe:", "curl ", "wget ", "http://", "https://"]}
+      ]
+    },
+    {
+      "name": "cleanup",
+      "description": "Tear the deployed environment down after validation when cleanup targets exist.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["services/app/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]},
+        {"type": "task_target_exists", "match_any": ["cleanup", "down"]}
+      ],
+      "receipts": [
+        {"name": "cleanup", "type": "command_ran", "match_any": ["task ci", "task cleanup", "task down", "helm uninstall"]}
+      ]
+    }
+  ]
+}

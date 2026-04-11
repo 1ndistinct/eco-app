@@ -1,0 +1,213 @@
+version: "3"
+
+tasks:
+  install:
+    desc: Install frontend dependencies
+    cmds:
+      - pnpm --dir services/web install --no-frozen-lockfile
+
+  dev:
+    desc: Run the backend API locally
+    cmds:
+      - go run ./services/app/cmd/api
+
+  test:backend:
+    desc: Run backend tests
+    cmds:
+      - go test ./services/app/...
+
+  test:frontend:
+    desc: Run frontend unit tests
+    cmds:
+      - task install
+      - sh -c 'TZ=UTC pnpm --dir services/web test -- --run'
+
+  test:
+    desc: Run backend and frontend tests
+    cmds:
+      - task test:backend
+      - task test:frontend
+
+  lint:backend:
+    desc: Run backend formatting checks
+    cmds:
+      - sh -c 'out=$(gofmt -l $(find services/app -name "*.go" -type f)); test -z "$out" || { printf "gofmt required for:\n%s\n" "$out" >&2; exit 1; }'
+
+  lint:frontend:
+    desc: Run frontend linting
+    cmds:
+      - task install
+      - pnpm --dir services/web lint
+
+  lint:
+    desc: Run backend and frontend linting
+    cmds:
+      - task lint:backend
+      - task lint:frontend
+
+  build:backend:
+    desc: Build the backend binary
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        mkdir -p .cache/bin; \
+        go build -o .cache/bin/app-api ./services/app/cmd/api'
+
+  build:frontend:
+    desc: Build the frontend bundle
+    cmds:
+      - task install
+      - pnpm --dir services/web build
+
+  build:
+    desc: Build backend and frontend artifacts
+    cmds:
+      - task build:backend
+      - task build:frontend
+
+  image:app:
+    desc: Build and push the backend image to the local registry
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-k3d-echo-registry.localhost:5000}/echo-agentic-todo-postfix-20260411210213-app:${IMAGE_TAG:-dev}"; \
+        buildctl-daemonless.sh build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --opt filename=services/app/Dockerfile \
+          --output type=image,name="$ref",push=true,registry.insecure=true'
+
+  image:web:
+    desc: Build and push the frontend image to the local registry
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-k3d-echo-registry.localhost:5000}/echo-agentic-todo-postfix-20260411210213-web:${IMAGE_TAG:-dev}"; \
+        buildctl-daemonless.sh build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --opt filename=services/web/Dockerfile \
+          --output type=image,name="$ref",push=true,registry.insecure=true'
+
+  deploy:
+    desc: Build images, deploy the chart, and refresh the app namespace
+    cmds:
+      - task image:app
+      - task image:web
+      - |
+        sh -c 'set -eu; \
+        ns="${APP_NAMESPACE:-app-system}"; \
+        release="${APP_RELEASE_NAME:-app}"; \
+        registry="${CLUSTER_REGISTRY:-k3d-echo-registry.localhost:5000}"; \
+        tag="${IMAGE_TAG:-dev}"; \
+        helm upgrade --install "$release" ./deploy/helm/app -f ./deploy/k3d/local.values.yaml \
+          --namespace "$ns" \
+          --wait --timeout "${DEPLOY_TIMEOUT:-5m}" \
+          --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
+          --set-string images.app.tag="$tag" \
+          --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
+          --set-string images.web.tag="$tag"; \
+        kubectl rollout status deployment/"$release-app" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
+        kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
+
+  up:
+    desc: Alias for deploy
+    cmds:
+      - task deploy
+
+  cleanup:
+    desc: Tear down the deployed release from the app namespace
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ns="${APP_NAMESPACE:-app-system}"; \
+        release="${APP_RELEASE_NAME:-app}"; \
+        if helm status "$release" -n "$ns" >/dev/null 2>&1; then \
+          helm uninstall "$release" -n "$ns" --wait; \
+        else \
+          echo "release $release is not deployed in $ns"; \
+        fi'
+
+  down:
+    desc: Alias for cleanup
+    cmds:
+      - task cleanup
+
+  status:
+    desc: Show deployed resources for the app namespace
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ns="${APP_NAMESPACE:-app-system}"; \
+        kubectl get pods,deploy,svc -n "$ns"'
+
+  urls:
+    desc: Print the external ingress URLs for the deployed app
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        release="${APP_RELEASE_NAME:-app}"; \
+        printf "frontend: http://%s.localhost\nbackend: http://api.%s.localhost/healthz\n" "$release" "$release"'
+
+  logs:
+    desc: "Stream deployment logs (for example: task logs -- web)"
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ns="${APP_NAMESPACE:-app-system}"; \
+        release="${APP_RELEASE_NAME:-app}"; \
+        target="${1:-app}"; \
+        kubectl logs -f -n "$ns" "deployment/$release-$target" --all-containers=true --prefix=true' -- {{.CLI_ARGS}}
+
+  probe:app:
+    desc: Probe the backend health endpoint in-cluster
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ns="${APP_NAMESPACE:-app-system}"; \
+        release="${APP_RELEASE_NAME:-app}"; \
+        curl -fsS "http://$release-app.$ns.svc.cluster.local:8080/healthz"'
+
+  probe:web:
+    desc: Probe the frontend root in-cluster
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ns="${APP_NAMESPACE:-app-system}"; \
+        release="${APP_RELEASE_NAME:-app}"; \
+        curl -fsS "http://$release-web.$ns.svc.cluster.local/" >/dev/null'
+
+  probe:app:external:
+    desc: Probe the backend health endpoint through ingress from the host
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        release="${APP_RELEASE_NAME:-app}"; \
+        curl -fsS "http://api.${release}.localhost/healthz"'
+
+  probe:web:external:
+    desc: Probe the frontend root through ingress from the host
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        release="${APP_RELEASE_NAME:-app}"; \
+        curl -fsS "http://${release}.localhost/" >/dev/null'
+
+  ci:
+    desc: Run whole-repo validation, deploy/probe cycle, and cleanup
+    cmds:
+      - task test
+      - |
+        sh -c 'set -eu; \
+        cleanup() { task cleanup; }; \
+        trap cleanup EXIT; \
+        task deploy; \
+        task probe:app; \
+        task probe:web'
+
+  branch:
+    desc: Print the default base branch
+    cmds:
+      - echo main

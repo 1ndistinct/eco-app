@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.appServiceName" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "app.appServiceName" . }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "app.appServiceName" . }}
+    spec:
+      containers:
+        - name: app
+          image: "{{ .Values.images.app.repository }}:{{ .Values.images.app.tag }}"
+          imagePullPolicy: {{ .Values.images.app.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.appPort }}
+          env:
+            - name: DATABASE_URL
+              value: "postgres://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@{{ include "app.postgresServiceName" . }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}?sslmode=disable"
+            - name: NATS_URL
+              value: "nats://{{ include "app.natsServiceName" . }}:{{ .Values.nats.port }}"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.service.appPort }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.service.appPort }}

@@ -1,0 +1,44 @@
+{
+  "name": "platform-data-messaging",
+  "description": "Data and messaging delivery phases for deployable backend changes.",
+  "phases": [
+    {
+      "name": "deploy",
+      "description": "Run deploy or ci when schema or messaging work changes deployable behavior.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["services/app/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]},
+        {"type": "task_target_exists", "match_any": ["deploy", "ci"]},
+        {"type": "task_target_prefix_exists", "match_any": ["probe:"]}
+      ],
+      "receipts": [
+        {"name": "deploy", "type": "command_ran", "match_any": ["task ci", "task deploy", "tilt ci", "helm upgrade --install", "kubectl apply"]}
+      ]
+    },
+    {
+      "name": "probe",
+      "description": "Probe the deployed backend after schema or messaging changes.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["services/app/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]},
+        {"type": "task_target_exists", "match_any": ["deploy", "ci"]},
+        {"type": "task_target_prefix_exists", "match_any": ["probe:"]}
+      ],
+      "receipts": [
+        {"name": "probe", "type": "command_ran", "match_any": ["task ci", "task probe:", "curl ", "wget ", "http://", "https://"]}
+      ]
+    },
+    {
+      "name": "cleanup",
+      "description": "Tear the deployed environment down after validation when cleanup targets exist.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["services/app/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]},
+        {"type": "task_target_exists", "match_any": ["cleanup", "down"]}
+      ],
+      "receipts": [
+        {"name": "cleanup", "type": "command_ran", "match_any": ["task ci", "task cleanup", "task down", "helm uninstall"]}
+      ]
+    }
+  ]
+}

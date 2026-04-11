@@ -1,0 +1,63 @@
+{
+  "name": "platform-backend",
+  "description": "Backend delivery phases for deployable code changes.",
+  "phases": [
+    {
+      "name": "implement",
+      "description": "Backend implementation tasks must change real backend service code, not only contract docs or notes.",
+      "required": true,
+      "receipts": [
+        {"name": "backend code changed", "type": "changed_file_matches", "match_any": ["services/app/**"]}
+      ]
+    },
+    {
+      "name": "tests-updated",
+      "description": "Backend behavior changes must update or add backend auechoated tests alongside the implementation.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["services/app/**"]}
+      ],
+      "receipts": [
+        {"name": "backend tests changed", "type": "changed_file_matches", "match_any": ["services/app/**/*_test.go"]}
+      ]
+    },
+    {
+      "name": "deploy",
+      "description": "Run deploy or ci when backend changes affect deployable behavior and deploy targets exist.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["services/app/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]},
+        {"type": "task_target_exists", "match_any": ["deploy", "ci"]},
+        {"type": "task_target_prefix_exists", "match_any": ["probe:"]}
+      ],
+      "receipts": [
+        {"name": "deploy", "type": "command_ran", "match_any": ["task ci", "task deploy", "tilt ci", "helm upgrade --install", "kubectl apply"]}
+      ]
+    },
+    {
+      "name": "probe",
+      "description": "Probe the deployed backend or run a small functional request after deploy.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["services/app/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]},
+        {"type": "task_target_exists", "match_any": ["deploy", "ci"]},
+        {"type": "task_target_prefix_exists", "match_any": ["probe:"]}
+      ],
+      "receipts": [
+        {"name": "probe", "type": "command_ran", "match_any": ["task ci", "task probe:", "curl ", "wget ", "http://", "https://"]}
+      ]
+    },
+    {
+      "name": "cleanup",
+      "description": "Tear the deployed environment down after validation when cleanup targets exist.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["services/app/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]},
+        {"type": "task_target_exists", "match_any": ["cleanup", "down"]}
+      ],
+      "receipts": [
+        {"name": "cleanup", "type": "command_ran", "match_any": ["task ci", "task cleanup", "task down", "helm uninstall"]}
+      ]
+    }
+  ]
+}

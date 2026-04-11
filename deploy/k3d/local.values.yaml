@@ -1,0 +1,9 @@
+images:
+  app:
+    repository: k3d-echo-registry.localhost:5000/echo-agentic-todo-postfix-20260411210213-app
+    tag: dev
+    pullPolicy: Always
+  web:
+    repository: k3d-echo-registry.localhost:5000/echo-agentic-todo-postfix-20260411210213-web
+    tag: dev
+    pullPolicy: Always

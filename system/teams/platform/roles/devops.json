@@ -1,0 +1,44 @@
+{
+  "name": "platform-devops",
+  "description": "Devops delivery phases for deploy and infrastructure changes.",
+  "phases": [
+    {
+      "name": "deploy",
+      "description": "Run deploy or ci when delivery tooling or deployment files change.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]},
+        {"type": "task_target_exists", "match_any": ["deploy", "ci"]},
+        {"type": "task_target_prefix_exists", "match_any": ["probe:"]}
+      ],
+      "receipts": [
+        {"name": "deploy", "type": "command_ran", "match_any": ["task ci", "task deploy", "tilt ci", "helm upgrade --install", "kubectl apply"]}
+      ]
+    },
+    {
+      "name": "probe",
+      "description": "Probe the deployed system after infrastructure or delivery changes.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]},
+        {"type": "task_target_exists", "match_any": ["deploy", "ci"]},
+        {"type": "task_target_prefix_exists", "match_any": ["probe:"]}
+      ],
+      "receipts": [
+        {"name": "probe", "type": "command_ran", "match_any": ["task ci", "task probe:", "curl ", "wget ", "http://", "https://"]}
+      ]
+    },
+    {
+      "name": "cleanup",
+      "description": "Tear the deployed environment down after validation when cleanup targets exist.",
+      "required": true,
+      "when": [
+        {"type": "changed_file_matches", "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]},
+        {"type": "task_target_exists", "match_any": ["cleanup", "down"]}
+      ],
+      "receipts": [
+        {"name": "cleanup", "type": "command_ran", "match_any": ["task ci", "task cleanup", "task down", "helm uninstall"]}
+      ]
+    }
+  ]
+}
