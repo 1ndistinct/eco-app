@@ -4,6 +4,7 @@ Use Taskfile commands for echo-agentic-todo-postfix-20260411210213.
 
 - task setup
 - task install
+- EMAIL=user@example.com task user:create:cluster
 - task test:backend
 - task test:frontend
 - task test
@@ -24,6 +25,7 @@ The human Docker path uses task deploy:docker and pushes to localhost:5001 by de
 Set PUSH_REGISTRY and CLUSTER_REGISTRY together when you want Docker pushes and cluster pulls to use a different registry.
 The backend now requires `DATABASE_URL` for local runtime; `task dev` runs the embedded goose migrations first and then starts the API.
 The Helm chart runs the same migration entrypoint as a dedicated Kubernetes Job, and the API waits for the latest migration version before it serves traffic.
+Users are provisioned explicitly. Use `go run ./services/app/cmd/api create-user <email>` against a local database, or `EMAIL=<email> task user:create:cluster` against the deployed cluster. The command prints the generated temporary password, and the user must reset it on first login.
 Default external routing uses one Traefik host with path-based endpoints:
 - frontend: http://app.localhost/
 - backend: http://app.localhost/api/healthz
@@ -32,3 +34,4 @@ The default repo validation paths now run the browser flow as well:
 - `task ci`
 - `tilt ci`
 `task ci` automatically falls back to `task deploy:docker` when `buildctl-daemonless.sh` is not installed locally.
+`task test:e2e` now expects `PLAYWRIGHT_LOGIN_EMAIL` and `PLAYWRIGHT_LOGIN_PASSWORD`; set `PLAYWRIGHT_RESET_PASSWORD` as well if the test user still needs the first-login password reset flow.

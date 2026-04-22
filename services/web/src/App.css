@@ -115,6 +115,13 @@
     linear-gradient(135deg, rgba(240, 93, 63, 0.04), rgba(22, 66, 60, 0.04));
 }
 
+.auth-panel,
+.share-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 250, 244, 0.96), rgba(255, 247, 239, 0.9)),
+    linear-gradient(135deg, rgba(22, 66, 60, 0.03), rgba(240, 93, 63, 0.05));
+}
+
 .todo-surface {
   position: relative;
   overflow: hidden;
@@ -135,6 +142,26 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.workspace-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.utility-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1.12fr) minmax(280px, 0.88fr);
+  align-items: start;
+}
+
+.subtle-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
 }
 
 .todo-list {
@@ -183,6 +210,10 @@
   text-decoration: line-through;
 }
 
+.todo-meta {
+  flex-wrap: wrap;
+}
+
 .empty-state {
   border: 1px dashed rgba(20, 34, 29, 0.18);
   background: rgba(255, 255, 255, 0.46);
@@ -201,6 +232,10 @@
 
 @media (max-width: 960px) {
   .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .utility-grid {
     grid-template-columns: 1fr;
   }
 }

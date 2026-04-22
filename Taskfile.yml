@@ -21,6 +21,11 @@ tasks:
       - go run ./services/app/cmd/api migrate
       - go run ./services/app/cmd/api
 
+  user:create:cluster:
+    desc: Provision a user inside the deployed cluster and print the generated password
+    cmds:
+      - sh ./services/app/scripts/create-cluster-user.sh
+
   test:backend:
     desc: Run backend tests
     cmds:

@@ -29,11 +29,12 @@ func main() {
 	}
 	defer db.Close()
 
-	if len(os.Args) > 1 && os.Args[1] == "migrate" {
-		if err := runMigrations(ctx, db); err != nil {
+	store := httpapi.NewPostgresStore(db)
+
+	if len(os.Args) > 1 {
+		if err := runCommand(ctx, store, db, os.Args[1:]); err != nil {
 			log.Fatal(err)
 		}
-		log.Print("database migrations applied")
 		return
 	}
 
@@ -130,5 +131,32 @@ func configureGoose() {
 	goose.SetBaseFS(migrationsFS)
 	if err := goose.SetDialect("postgres"); err != nil {
 		log.Fatalf("configure goose dialect: %v", err)
+	}
+}
+
+func runCommand(ctx context.Context, store *httpapi.PostgresStore, db *sqlx.DB, args []string) error {
+	switch args[0] {
+	case "migrate":
+		if err := runMigrations(ctx, db); err != nil {
+			return err
+		}
+		log.Print("database migrations applied")
+		return nil
+	case "create-user":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: app-api create-user <email>")
+		}
+
+		provisionedUser, err := store.ProvisionUser(ctx, args[1])
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("email=%s\n", provisionedUser.Email)
+		fmt.Printf("password=%s\n", provisionedUser.Password)
+		fmt.Println("password_reset_required=true")
+		return nil
+	default:
+		return fmt.Errorf("unknown command %q", args[0])
 	}
 }

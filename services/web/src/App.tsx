@@ -1,14 +1,17 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import ApiRoundedIcon from "@mui/icons-material/ApiRounded";
-import AutorenewRoundedIcon from "@mui/icons-material/AutorenewRounded";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import CircleRoundedIcon from "@mui/icons-material/CircleRounded";
 import DoneRoundedIcon from "@mui/icons-material/DoneRounded";
+import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
+import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
+import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import RocketLaunchRoundedIcon from "@mui/icons-material/RocketLaunchRounded";
+import ShareRoundedIcon from "@mui/icons-material/ShareRounded";
 import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
+import VpnKeyRoundedIcon from "@mui/icons-material/VpnKeyRounded";
 import {
   Alert,
   Box,
@@ -30,17 +33,57 @@ type Todo = {
   id: string;
   title: string;
   completed: boolean;
+  ownerEmail: string;
+  workspaceEmail: string;
 };
 
 type TodoListResponse = {
   items: Todo[];
+  workspaceEmail: string;
+};
+
+type WorkspaceAccess = {
+  ownerEmail: string;
+  role: "owner" | "collaborator";
+};
+
+type WorkspaceShare = {
+  workspaceEmail: string;
+  email: string;
+};
+
+type ShareListResponse = {
+  items: WorkspaceShare[];
+  workspaceEmail: string;
+};
+
+type SessionUser = {
+  email: string;
+  passwordResetRequired: boolean;
+};
+
+type SessionState = {
+  authenticated: boolean;
+  user?: SessionUser;
+  accessibleWorkspaces?: WorkspaceAccess[];
 };
 
 type ApiError = {
   error?: string;
 };
 
+const SESSION_ENDPOINT = "/api/auth/session";
+const LOGIN_ENDPOINT = "/api/auth/login";
+const LOGOUT_ENDPOINT = "/api/auth/logout";
+const RESET_PASSWORD_ENDPOINT = "/api/auth/reset-password";
 const TODO_ENDPOINT = "/api/todos";
+const SHARE_ENDPOINT = "/api/shares";
+
+const UNAUTHENTICATED_SESSION: SessionState = {
+  authenticated: false,
+  accessibleWorkspaces: [],
+};
+const EMPTY_WORKSPACES: WorkspaceAccess[] = [];
 
 async function readErrorMessage(response: Response, fallback: string) {
   try {
@@ -56,69 +99,296 @@ async function readErrorMessage(response: Response, fallback: string) {
 }
 
 export function App() {
+  const [session, setSession] = useState<SessionState | null>(null);
+  const [selectedWorkspace, setSelectedWorkspace] = useState("");
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [title, setTitle] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [shares, setShares] = useState<WorkspaceShare[]>([]);
+
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [resetCurrentPassword, setResetCurrentPassword] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [todoTitle, setTodoTitle] = useState("");
+  const [shareEmail, setShareEmail] = useState("");
+
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
+  const [isSubmittingPasswordReset, setIsSubmittingPasswordReset] = useState(false);
+  const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
+  const [isSubmittingTodo, setIsSubmittingTodo] = useState(false);
+  const [isSubmittingShare, setIsSubmittingShare] = useState(false);
   const [updatingTodoIds, setUpdatingTodoIds] = useState<string[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [todoError, setTodoError] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareSuccess, setShareSuccess] = useState<string | null>(null);
+
+  const currentUser = session?.user;
+  const isAuthenticated = session?.authenticated === true;
+  const requiresPasswordReset = currentUser?.passwordResetRequired === true;
+  const accessibleWorkspaces = session?.accessibleWorkspaces ?? EMPTY_WORKSPACES;
+  const currentWorkspace = accessibleWorkspaces.find(
+    (workspace) => workspace.ownerEmail === selectedWorkspace,
+  );
+  const collaboratorEmails = useMemo(
+    () =>
+      shares
+        .map((share) => share.email)
+        .filter((email, index, emails) => emails.indexOf(email) === index),
+    [shares],
+  );
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadTodos() {
-      setIsLoading(true);
-      setLoadError(null);
+    async function loadSession() {
+      setIsInitializing(true);
+      setSessionError(null);
 
       try {
-        const response = await fetch(TODO_ENDPOINT);
+        const response = await fetch(SESSION_ENDPOINT);
         if (!response.ok) {
-          throw new Error(await readErrorMessage(response, "Unable to load todos."));
+          throw new Error(await readErrorMessage(response, "Unable to load the current session."));
         }
 
-        const data = (await response.json()) as Partial<TodoListResponse>;
+        const data = (await response.json()) as SessionState;
         if (isMounted) {
-          setTodos(Array.isArray(data.items) ? data.items : []);
+          setSession({
+            authenticated: data.authenticated,
+            user: data.user,
+            accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
+              ? data.accessibleWorkspaces
+              : [],
+          });
         }
       } catch (error) {
         if (isMounted) {
-          setLoadError(error instanceof Error ? error.message : "Unable to load todos.");
+          setSessionError(
+            error instanceof Error ? error.message : "Unable to load the current session.",
+          );
+          setSession(UNAUTHENTICATED_SESSION);
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false);
+          setIsInitializing(false);
         }
       }
     }
 
-    void loadTodos();
+    void loadSession();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
+  useEffect(() => {
+    if (!isAuthenticated || requiresPasswordReset) {
+      setSelectedWorkspace("");
+      setTodos([]);
+      setShares([]);
+      return;
+    }
+
+    if (accessibleWorkspaces.length === 0) {
+      setSelectedWorkspace("");
+      return;
+    }
+
+    setSelectedWorkspace((currentWorkspaceEmail) => {
+      if (
+        currentWorkspaceEmail !== "" &&
+        accessibleWorkspaces.some((workspace) => workspace.ownerEmail === currentWorkspaceEmail)
+      ) {
+        return currentWorkspaceEmail;
+      }
+
+      return currentUser?.email ?? accessibleWorkspaces[0].ownerEmail;
+    });
+  }, [accessibleWorkspaces, currentUser?.email, isAuthenticated, requiresPasswordReset]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadWorkspaceData() {
+      if (!isAuthenticated || requiresPasswordReset || selectedWorkspace === "") {
+        return;
+      }
+
+      setIsWorkspaceLoading(true);
+      setWorkspaceError(null);
+      setTodoError(null);
+      setShareError(null);
+      setShareSuccess(null);
+
+      try {
+        const [todoResponse, shareResponse] = await Promise.all([
+          fetch(`${TODO_ENDPOINT}?workspace=${encodeURIComponent(selectedWorkspace)}`),
+          fetch(`${SHARE_ENDPOINT}?workspace=${encodeURIComponent(selectedWorkspace)}`),
+        ]);
+
+        if (todoResponse.status === 401 || shareResponse.status === 401) {
+          if (isMounted) {
+            setSession(UNAUTHENTICATED_SESSION);
+          }
+          return;
+        }
+        if (!todoResponse.ok) {
+          throw new Error(await readErrorMessage(todoResponse, "Unable to load todos."));
+        }
+        if (!shareResponse.ok) {
+          throw new Error(await readErrorMessage(shareResponse, "Unable to load collaborators."));
+        }
+
+        const todoData = (await todoResponse.json()) as Partial<TodoListResponse>;
+        const shareData = (await shareResponse.json()) as Partial<ShareListResponse>;
+
+        if (isMounted) {
+          setTodos(Array.isArray(todoData.items) ? todoData.items : []);
+          setShares(Array.isArray(shareData.items) ? shareData.items : []);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setWorkspaceError(
+            error instanceof Error ? error.message : "Unable to load the selected workspace.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsWorkspaceLoading(false);
+        }
+      }
+    }
+
+    void loadWorkspaceData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, requiresPasswordReset, selectedWorkspace]);
+
   const remainingCount = todos.filter((todo) => !todo.completed).length;
   const completedCount = todos.length - remainingCount;
   const completionRatio =
     todos.length === 0 ? 0 : Math.round((completedCount / todos.length) * 100);
   const focusTodo = todos.find((todo) => !todo.completed)?.title;
-  const latestTodo = todos.at(-1)?.title;
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const trimmedTitle = title.trim();
-    if (trimmedTitle === "") {
-      setSubmitError("Title is required");
+    if (loginEmail.trim() === "" || loginPassword.trim() === "") {
+      setLoginError("Email and password are required.");
       return;
     }
 
-    setIsSubmitting(true);
-    setSubmitError(null);
-    setActionError(null);
+    setIsSubmittingLogin(true);
+    setLoginError(null);
+    setSessionError(null);
+
+    try {
+      const response = await fetch(LOGIN_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: loginEmail.trim(),
+          password: loginPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "Unable to log in."));
+      }
+
+      const data = (await response.json()) as SessionState;
+      setSession({
+        authenticated: data.authenticated,
+        user: data.user,
+        accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
+          ? data.accessibleWorkspaces
+          : [],
+      });
+      setResetCurrentPassword("");
+      setResetNewPassword("");
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Unable to log in.");
+    } finally {
+      setIsSubmittingLogin(false);
+    }
+  }
+
+  async function handlePasswordReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (resetCurrentPassword.trim() === "" || resetNewPassword.trim() === "") {
+      setResetError("Current password and new password are required.");
+      return;
+    }
+
+    setIsSubmittingPasswordReset(true);
+    setResetError(null);
+
+    try {
+      const response = await fetch(RESET_PASSWORD_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword: resetCurrentPassword,
+          newPassword: resetNewPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "Unable to reset the password."));
+      }
+
+      const data = (await response.json()) as SessionState;
+      setSession({
+        authenticated: data.authenticated,
+        user: data.user,
+        accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
+          ? data.accessibleWorkspaces
+          : [],
+      });
+      setResetCurrentPassword("");
+      setResetNewPassword("");
+    } catch (error) {
+      setResetError(
+        error instanceof Error ? error.message : "Unable to reset the password.",
+      );
+    } finally {
+      setIsSubmittingPasswordReset(false);
+    }
+  }
+
+  async function handleLogout() {
+    await fetch(LOGOUT_ENDPOINT, { method: "POST" });
+    setSession(UNAUTHENTICATED_SESSION);
+    setLoginPassword("");
+    setSelectedWorkspace("");
+    setTodos([]);
+    setShares([]);
+    setShareSuccess(null);
+  }
+
+  async function handleSubmitTodo(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const trimmedTitle = todoTitle.trim();
+    if (trimmedTitle === "") {
+      setTodoError("Title is required.");
+      return;
+    }
+
+    setIsSubmittingTodo(true);
+    setTodoError(null);
 
     try {
       const response = await fetch(TODO_ENDPOINT, {
@@ -126,27 +396,34 @@ export function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ title: trimmedTitle }),
+        body: JSON.stringify({
+          title: trimmedTitle,
+          workspaceEmail: selectedWorkspace,
+        }),
       });
 
+      if (response.status === 401) {
+        setSession(UNAUTHENTICATED_SESSION);
+        return;
+      }
       if (!response.ok) {
         throw new Error(await readErrorMessage(response, "Unable to create todo."));
       }
 
       const createdTodo = (await response.json()) as Todo;
       setTodos((currentTodos) => [...currentTodos, createdTodo]);
-      setTitle("");
+      setTodoTitle("");
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Unable to create todo.");
+      setTodoError(error instanceof Error ? error.message : "Unable to create todo.");
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingTodo(false);
     }
   }
 
   async function handleToggleTodo(todo: Todo) {
     const nextCompleted = !todo.completed;
 
-    setActionError(null);
+    setTodoError(null);
     setUpdatingTodoIds((currentIds) => [...currentIds, todo.id]);
 
     try {
@@ -158,6 +435,10 @@ export function App() {
         body: JSON.stringify({ completed: nextCompleted }),
       });
 
+      if (response.status === 401) {
+        setSession(UNAUTHENTICATED_SESSION);
+        return;
+      }
       if (!response.ok) {
         throw new Error(await readErrorMessage(response, "Unable to update todo."));
       }
@@ -169,10 +450,239 @@ export function App() {
         ),
       );
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Unable to update todo.");
+      setTodoError(error instanceof Error ? error.message : "Unable to update todo.");
     } finally {
       setUpdatingTodoIds((currentIds) => currentIds.filter((id) => id !== todo.id));
     }
+  }
+
+  async function handleShareWorkspace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (shareEmail.trim() === "") {
+      setShareError("Collaborator email is required.");
+      return;
+    }
+
+    setIsSubmittingShare(true);
+    setShareError(null);
+    setShareSuccess(null);
+
+    try {
+      const response = await fetch(SHARE_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceEmail: selectedWorkspace,
+          email: shareEmail.trim(),
+        }),
+      });
+
+      if (response.status === 401) {
+        setSession(UNAUTHENTICATED_SESSION);
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "Unable to share the workspace."));
+      }
+
+      const createdShare = (await response.json()) as WorkspaceShare;
+      setShares((currentShares) => {
+        if (currentShares.some((share) => share.email === createdShare.email)) {
+          return currentShares;
+        }
+
+        return [...currentShares, createdShare];
+      });
+      setShareEmail("");
+      setShareSuccess(`Shared with ${createdShare.email}.`);
+    } catch (error) {
+      setShareError(
+        error instanceof Error ? error.message : "Unable to share the workspace.",
+      );
+    } finally {
+      setIsSubmittingShare(false);
+    }
+  }
+
+  function renderAuthShell(
+    title: string,
+    subtitle: string,
+    content: ReactNode,
+    helper?: ReactNode,
+  ) {
+    return (
+      <Box component="main" className="app-shell" sx={{ py: { xs: 4, md: 6 } }}>
+        <Container maxWidth="sm">
+          <Stack spacing={3}>
+            <Paper
+              elevation={0}
+              className="hero-panel"
+              sx={{ p: { xs: 3, md: 4 }, borderRadius: { xs: "28px", md: "34px" } }}
+            >
+              <Stack spacing={2.5}>
+                <Chip
+                  icon={<VpnKeyRoundedIcon />}
+                  label="Private workspace access"
+                  sx={{
+                    alignSelf: "flex-start",
+                    bgcolor: alpha("#16423c", 0.08),
+                    color: "text.primary",
+                  }}
+                />
+                <Typography variant="h2">{title}</Typography>
+                <Typography color="text.secondary">{subtitle}</Typography>
+                {helper}
+              </Stack>
+            </Paper>
+
+            <Paper
+              elevation={0}
+              className="soft-panel auth-panel"
+              sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "26px", md: "30px" } }}
+            >
+              {content}
+            </Paper>
+          </Stack>
+        </Container>
+      </Box>
+    );
+  }
+
+  if (isInitializing) {
+    return renderAuthShell(
+      "Loading the workspace",
+      "Checking for an existing session before the UI decides which flow to show.",
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+        <CircularProgress size={20} />
+        <Typography>Loading session…</Typography>
+      </Stack>,
+      sessionError ? <Alert severity="error">{sessionError}</Alert> : undefined,
+    );
+  }
+
+  if (!isAuthenticated) {
+    return renderAuthShell(
+      "Log in to your queue",
+      "Every workspace is private until it is explicitly shared. Use the credentials provisioned for your account.",
+      <Stack spacing={3}>
+        <Stack spacing={1}>
+          <Typography className="section-kicker">
+            <PersonRoundedIcon sx={{ fontSize: 16 }} />
+            Sign in
+          </Typography>
+          <Typography variant="h4">Workspace login</Typography>
+        </Stack>
+        <Box component="form" onSubmit={handleLogin}>
+          <Stack spacing={2}>
+            <TextField
+              label="Email"
+              type="email"
+              value={loginEmail}
+              onChange={(event) => setLoginEmail(event.target.value)}
+              autoComplete="email"
+              disabled={isSubmittingLogin}
+              fullWidth
+            />
+            <TextField
+              label="Password"
+              type="password"
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+              autoComplete="current-password"
+              disabled={isSubmittingLogin}
+              fullWidth
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              disabled={isSubmittingLogin}
+              startIcon={
+                isSubmittingLogin ? (
+                  <CircularProgress size={18} color="inherit" />
+                ) : (
+                  <VpnKeyRoundedIcon />
+                )
+              }
+              sx={{ alignSelf: "flex-start" }}
+            >
+              {isSubmittingLogin ? "Logging in…" : "Log in"}
+            </Button>
+          </Stack>
+        </Box>
+        {loginError ? <Alert severity="error">{loginError}</Alert> : null}
+      </Stack>,
+      sessionError ? <Alert severity="error">{sessionError}</Alert> : undefined,
+    );
+  }
+
+  if (requiresPasswordReset) {
+    return renderAuthShell(
+      "Replace the temporary password",
+      "Provisioned accounts land with a one-time password. Reset it now, then the workspace unlocks fully.",
+      <Stack spacing={3}>
+        <Stack spacing={1}>
+          <Typography className="section-kicker">
+            <VpnKeyRoundedIcon sx={{ fontSize: 16 }} />
+            Password reset
+          </Typography>
+          <Typography variant="h4">{currentUser?.email}</Typography>
+        </Stack>
+        <Box component="form" onSubmit={handlePasswordReset}>
+          <Stack spacing={2}>
+            <TextField
+              label="Current password"
+              type="password"
+              value={resetCurrentPassword}
+              onChange={(event) => setResetCurrentPassword(event.target.value)}
+              autoComplete="current-password"
+              disabled={isSubmittingPasswordReset}
+              fullWidth
+            />
+            <TextField
+              label="New password"
+              type="password"
+              value={resetNewPassword}
+              onChange={(event) => setResetNewPassword(event.target.value)}
+              autoComplete="new-password"
+              helperText="Use at least 12 characters."
+              disabled={isSubmittingPasswordReset}
+              fullWidth
+            />
+            <Stack direction="row" spacing={1.25} sx={{ flexWrap: "wrap" }}>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disabled={isSubmittingPasswordReset}
+                startIcon={
+                  isSubmittingPasswordReset ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : (
+                    <DoneRoundedIcon />
+                  )
+                }
+              >
+                {isSubmittingPasswordReset ? "Saving…" : "Save password"}
+              </Button>
+              <Button
+                type="button"
+                variant="outlined"
+                color="inherit"
+                onClick={() => void handleLogout()}
+                startIcon={<LogoutRoundedIcon />}
+              >
+                Log out
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+        {resetError ? <Alert severity="error">{resetError}</Alert> : null}
+      </Stack>,
+    );
   }
 
   return (
@@ -186,29 +696,39 @@ export function App() {
           >
             <Stack spacing={{ xs: 3, md: 4 }} sx={{ position: "relative", zIndex: 1 }}>
               <Stack
-                direction={{ xs: "column", sm: "row" }}
+                direction={{ xs: "column", md: "row" }}
                 spacing={1.5}
                 sx={{
                   justifyContent: "space-between",
-                  alignItems: { xs: "flex-start", sm: "center" },
+                  alignItems: { xs: "flex-start", md: "center" },
                 }}
               >
-                <Chip
-                  icon={<AutoAwesomeRoundedIcon />}
-                  label="Focused daily queue"
-                  sx={{
-                    bgcolor: alpha("#16423c", 0.08),
-                    color: "text.primary",
-                  }}
-                />
-                <Chip
-                  icon={<ApiRoundedIcon />}
-                  label="Connected to the app API"
-                  sx={{
-                    bgcolor: alpha("#f05d3f", 0.12),
-                    color: "text.primary",
-                  }}
-                />
+                <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                  <Chip
+                    icon={<PersonRoundedIcon />}
+                    label={`Signed in as ${currentUser?.email}`}
+                    sx={{
+                      bgcolor: alpha("#16423c", 0.08),
+                      color: "text.primary",
+                    }}
+                  />
+                  <Chip
+                    icon={<ShareRoundedIcon />}
+                    label={`${accessibleWorkspaces.length} accessible workspace${accessibleWorkspaces.length === 1 ? "" : "s"}`}
+                    sx={{
+                      bgcolor: alpha("#f05d3f", 0.12),
+                      color: "text.primary",
+                    }}
+                  />
+                </Stack>
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  onClick={() => void handleLogout()}
+                  startIcon={<LogoutRoundedIcon />}
+                >
+                  Log out
+                </Button>
               </Stack>
 
               <Box className="hero-grid">
@@ -216,15 +736,38 @@ export function App() {
                   <Stack spacing={2}>
                     <Typography className="section-kicker">
                       <BoltRoundedIcon sx={{ fontSize: 16 }} />
-                      Daily queue
+                      Shared todo workspaces
                     </Typography>
                     <Typography id="todo-heading" variant="h1">
-                      Todo list
+                      Shared queues, explicit owners
                     </Typography>
-                    <Typography variant="h5" sx={{ maxWidth: 640, color: "text.secondary" }}>
-                      Keep the day clear, close things out decisively, and let the interface
-                      stay out of the way.
+                    <Typography variant="h5" sx={{ maxWidth: 700, color: "text.secondary" }}>
+                      Every queue belongs to a user, every collaborator is explicit, and the
+                      current workspace stays obvious while you work inside it.
                     </Typography>
+                  </Stack>
+
+                  <Stack spacing={1.5}>
+                    <Typography variant="overline" color="text.secondary">
+                      Accessible workspaces
+                    </Typography>
+                    <Box className="workspace-chip-group" role="tablist" aria-label="Workspaces">
+                      {accessibleWorkspaces.map((workspace) => {
+                        const isSelected = workspace.ownerEmail === selectedWorkspace;
+
+                        return (
+                          <Chip
+                            key={workspace.ownerEmail}
+                            label={workspace.ownerEmail}
+                            color={isSelected ? "primary" : "default"}
+                            variant={isSelected ? "filled" : "outlined"}
+                            onClick={() => setSelectedWorkspace(workspace.ownerEmail)}
+                            role="tab"
+                            aria-selected={isSelected}
+                          />
+                        );
+                      })}
+                    </Box>
                   </Stack>
 
                   <Box
@@ -246,7 +789,7 @@ export function App() {
                           </Typography>
                           <Typography variant="h3">{todos.length}</Typography>
                           <Typography color="text.secondary">
-                            Total tasks currently tracked.
+                            Total tasks in the selected workspace.
                           </Typography>
                         </Stack>
                       </CardContent>
@@ -261,7 +804,7 @@ export function App() {
                           </Typography>
                           <Typography variant="h3">{remainingCount}</Typography>
                           <Typography color="text.secondary">
-                            Work still in the active lane.
+                            Work still open in this queue.
                           </Typography>
                         </Stack>
                       </CardContent>
@@ -276,7 +819,7 @@ export function App() {
                           </Typography>
                           <Typography variant="h3">{completionRatio}%</Typography>
                           <Typography color="text.secondary">
-                            Finished items as a share of the list.
+                            Closed items as a share of the full workspace queue.
                           </Typography>
                         </Stack>
                       </CardContent>
@@ -287,19 +830,16 @@ export function App() {
                 <Box className="spotlight-panel">
                   <Stack spacing={2.5}>
                     <Stack spacing={1}>
-                      <Typography
-                        variant="overline"
-                        sx={{ color: alpha("#fff6ef", 0.72) }}
-                      >
-                        Priority now
+                      <Typography variant="overline" sx={{ color: alpha("#fff6ef", 0.72) }}>
+                        Selected workspace
                       </Typography>
                       <Typography variant="h4">
-                        {focusTodo ? `Next up: ${focusTodo}` : "Nothing queued yet"}
+                        {selectedWorkspace || currentUser?.email}
                       </Typography>
                       <Typography sx={{ color: alpha("#fff6ef", 0.72) }}>
                         {focusTodo
-                          ? "Mark items done as you close them out."
-                          : "Add the first task and the queue will start shaping itself."}
+                          ? `Priority now: ${focusTodo}`
+                          : "Add the first task or switch workspaces to pick something up."}
                       </Typography>
                     </Stack>
 
@@ -328,32 +868,29 @@ export function App() {
 
                     <Box className="surface-chips">
                       <Chip
+                        icon={<PersonRoundedIcon sx={{ fontSize: 16 }} />}
+                        label={
+                          currentWorkspace?.role === "owner" ? "Owner access" : "Collaborator access"
+                        }
+                        sx={{
+                          bgcolor: alpha("#ffffff", 0.12),
+                          color: "#fff8f2",
+                        }}
+                      />
+                      <Chip
+                        icon={<GroupRoundedIcon sx={{ fontSize: 16 }} />}
+                        label={`${collaboratorEmails.length} collaborator${collaboratorEmails.length === 1 ? "" : "s"}`}
+                        sx={{
+                          bgcolor: alpha("#ffffff", 0.12),
+                          color: "#fff8f2",
+                        }}
+                      />
+                      <Chip
                         icon={<CircleRoundedIcon sx={{ fontSize: 12 }} />}
-                        label={`${remainingCount} still open`}
+                        label={`${remainingCount} open`}
                         sx={{
                           bgcolor: alpha("#ffffff", 0.12),
                           color: "#fff8f2",
-                        }}
-                      />
-                      <Chip
-                        icon={<CheckCircleRoundedIcon sx={{ fontSize: 16 }} />}
-                        label={`${completedCount} completed`}
-                        sx={{
-                          bgcolor: alpha("#ffffff", 0.12),
-                          color: "#fff8f2",
-                        }}
-                      />
-                      <Chip
-                        icon={<AutoAwesomeRoundedIcon sx={{ fontSize: 16 }} />}
-                        label={latestTodo ? `Latest added · ${latestTodo}` : "Fresh canvas"}
-                        sx={{
-                          maxWidth: "100%",
-                          bgcolor: alpha("#ffffff", 0.12),
-                          color: "#fff8f2",
-                          "& .MuiChip-label": {
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          },
                         }}
                       />
                     </Box>
@@ -363,67 +900,155 @@ export function App() {
             </Stack>
           </Paper>
 
-          <Paper
-            elevation={0}
-            className="soft-panel composer-panel"
-            sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "28px", md: "34px" } }}
-          >
-            <Stack spacing={3}>
-              <Stack spacing={1}>
-                <Typography className="section-kicker">
-                  <AddRoundedIcon sx={{ fontSize: 16 }} />
-                  Capture new work
-                </Typography>
-                <Typography variant="h4">Add the next move</Typography>
-                <Typography color="text.secondary">
-                  Keep input friction low and move straight back to the queue.
-                </Typography>
-              </Stack>
-
-              <Box component="form" onSubmit={handleSubmit} aria-label="Create a todo">
-                <Stack
-                  direction={{ xs: "column", md: "row" }}
-                  spacing={1.5}
-                  sx={{ alignItems: { md: "flex-start" } }}
-                >
-                  <TextField
-                    id="todo-title"
-                    name="title"
-                    label="New todo"
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    placeholder="What needs doing?"
-                    disabled={isSubmitting}
-                    fullWidth
-                    autoComplete="off"
-                    helperText="Press Enter or use the button to drop it into the queue."
-                  />
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    color="primary"
-                    disabled={isSubmitting}
-                    startIcon={
-                      isSubmitting ? (
-                        <CircularProgress size={18} color="inherit" />
-                      ) : (
-                        <AddRoundedIcon />
-                      )
-                    }
-                    sx={{
-                      minWidth: { md: 154 },
-                      mt: { md: "4px" },
-                      alignSelf: "flex-start",
-                    }}
-                  >
-                    {isSubmitting ? "Adding…" : "Add todo"}
-                  </Button>
+          <Box className="utility-grid">
+            <Paper
+              elevation={0}
+              className="soft-panel composer-panel"
+              sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "28px", md: "34px" } }}
+            >
+              <Stack spacing={3}>
+                <Stack spacing={1}>
+                  <Typography className="section-kicker">
+                    <AddRoundedIcon sx={{ fontSize: 16 }} />
+                    Capture new work
+                  </Typography>
+                  <Typography variant="h4">Add the next move</Typography>
+                  <Typography color="text.secondary">
+                    New items land inside <strong>{selectedWorkspace}</strong> and stay owned by
+                    the user who creates them.
+                  </Typography>
                 </Stack>
-              </Box>
 
-              {submitError ? <Alert severity="error">{submitError}</Alert> : null}
-            </Stack>
-          </Paper>
+                <Box component="form" onSubmit={handleSubmitTodo} aria-label="Create a todo">
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={1.5}
+                    sx={{ alignItems: { md: "flex-start" } }}
+                  >
+                    <TextField
+                      id="todo-title"
+                      name="title"
+                      label="New todo"
+                      value={todoTitle}
+                      onChange={(event) => setTodoTitle(event.target.value)}
+                      placeholder="What needs doing?"
+                      disabled={isSubmittingTodo}
+                      fullWidth
+                      autoComplete="off"
+                      helperText="Press Enter or use the button to drop it into the active workspace."
+                    />
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      color="primary"
+                      disabled={isSubmittingTodo || selectedWorkspace === ""}
+                      startIcon={
+                        isSubmittingTodo ? (
+                          <CircularProgress size={18} color="inherit" />
+                        ) : (
+                          <AddRoundedIcon />
+                        )
+                      }
+                      sx={{
+                        minWidth: { md: 154 },
+                        mt: { md: "4px" },
+                        alignSelf: "flex-start",
+                      }}
+                    >
+                      {isSubmittingTodo ? "Adding…" : "Add todo"}
+                    </Button>
+                  </Stack>
+                </Box>
+
+                {todoError ? <Alert severity="error">{todoError}</Alert> : null}
+              </Stack>
+            </Paper>
+
+            <Paper
+              elevation={0}
+              className="soft-panel share-panel"
+              sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "28px", md: "34px" } }}
+            >
+              <Stack spacing={3}>
+                <Stack spacing={1}>
+                  <Typography className="section-kicker">
+                    <ShareRoundedIcon sx={{ fontSize: 16 }} />
+                    Workspace sharing
+                  </Typography>
+                  <Typography variant="h4">Invite collaborators</Typography>
+                  <Typography color="text.secondary">
+                    Everyone added here can see, edit, and re-share the current workspace.
+                  </Typography>
+                </Stack>
+
+                <Box component="form" onSubmit={handleShareWorkspace}>
+                  <Stack spacing={1.5}>
+                    <TextField
+                      label="Collaborator email"
+                      type="email"
+                      value={shareEmail}
+                      onChange={(event) => setShareEmail(event.target.value)}
+                      autoComplete="email"
+                      disabled={isSubmittingShare}
+                      fullWidth
+                    />
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      color="secondary"
+                      disabled={isSubmittingShare || selectedWorkspace === ""}
+                      startIcon={
+                        isSubmittingShare ? (
+                          <CircularProgress size={18} color="inherit" />
+                        ) : (
+                          <ShareRoundedIcon />
+                        )
+                      }
+                      sx={{ alignSelf: "flex-start" }}
+                    >
+                      {isSubmittingShare ? "Sharing…" : "Share workspace"}
+                    </Button>
+                  </Stack>
+                </Box>
+
+                <Stack spacing={1.25}>
+                  <Typography variant="overline" color="text.secondary">
+                    Current collaborators
+                  </Typography>
+                  <Box className="subtle-list">
+                    <Chip
+                      icon={<PersonRoundedIcon />}
+                      label={`${selectedWorkspace} · owner`}
+                      sx={{
+                        bgcolor: alpha("#16423c", 0.08),
+                        color: "text.primary",
+                      }}
+                    />
+                    {collaboratorEmails.length === 0 ? (
+                      <Typography color="text.secondary">
+                        No collaborators yet. Add someone above to share the queue.
+                      </Typography>
+                    ) : (
+                      collaboratorEmails.map((email) => (
+                        <Chip
+                          key={email}
+                          icon={<GroupRoundedIcon />}
+                          label={email}
+                          sx={{
+                            bgcolor: alpha("#f05d3f", 0.08),
+                            color: "text.primary",
+                          }}
+                        />
+                      ))
+                    )}
+                  </Box>
+                </Stack>
+
+                {shareError ? <Alert severity="error">{shareError}</Alert> : null}
+                {shareSuccess ? <Alert severity="success">{shareSuccess}</Alert> : null}
+              </Stack>
+            </Paper>
+          </Box>
 
           <Paper
             elevation={0}
@@ -442,10 +1067,10 @@ export function App() {
                 <Box>
                   <Typography className="section-kicker">
                     <TaskAltRoundedIcon sx={{ fontSize: 16 }} />
-                    Active queue
+                    Workspace queue
                   </Typography>
                   <Typography variant="h3" sx={{ mt: 1 }}>
-                    Close work cleanly
+                    {selectedWorkspace}
                   </Typography>
                 </Box>
                 <Box className="surface-chips">
@@ -468,17 +1093,16 @@ export function App() {
                 </Box>
               </Stack>
 
-              {loadError ? <Alert severity="error">{loadError}</Alert> : null}
-              {actionError ? <Alert severity="error">{actionError}</Alert> : null}
+              {workspaceError ? <Alert severity="error">{workspaceError}</Alert> : null}
 
-              {isLoading ? (
+              {isWorkspaceLoading ? (
                 <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
                   <CircularProgress size={20} />
-                  <Typography>Loading todos…</Typography>
+                  <Typography>Loading workspace…</Typography>
                 </Stack>
               ) : null}
 
-              {!isLoading && !loadError ? (
+              {!isWorkspaceLoading && !workspaceError ? (
                 <>
                   <Typography color="text.secondary">{remainingCount} items remaining</Typography>
 
@@ -497,9 +1121,11 @@ export function App() {
                             color: "text.primary",
                           }}
                         />
-                        <Typography variant="h5">No todos yet. Add your first item above.</Typography>
+                        <Typography variant="h5">
+                          No todos in this workspace yet. Add the first item above.
+                        </Typography>
                         <Typography color="text.secondary">
-                          The queue becomes useful the moment the first task lands.
+                          Ownership is assigned automatically when the task is created.
                         </Typography>
                       </Stack>
                     </Paper>
@@ -508,6 +1134,10 @@ export function App() {
                       {todos.map((todo, index) => {
                         const isComplete = todo.completed;
                         const isUpdating = updatingTodoIds.includes(todo.id);
+                        const ownerLabel =
+                          todo.ownerEmail === currentUser?.email
+                            ? "Owned by you"
+                            : `Owned by ${todo.ownerEmail}`;
 
                         return (
                           <Card
@@ -547,11 +1177,18 @@ export function App() {
                                     >
                                       {todo.title}
                                     </Typography>
-                                    <Typography color="text.secondary">
-                                      {isComplete
-                                        ? "Completed and ready to archive mentally."
-                                        : "Open and ready for action."}
-                                    </Typography>
+                                    <Stack
+                                      direction={{ xs: "column", sm: "row" }}
+                                      spacing={{ xs: 0.25, sm: 1 }}
+                                      className="todo-meta"
+                                    >
+                                      <Typography color="text.secondary">
+                                        {isComplete
+                                          ? "Completed and ready to archive mentally."
+                                          : "Open and ready for action."}
+                                      </Typography>
+                                      <Typography color="text.secondary">{ownerLabel}</Typography>
+                                    </Stack>
                                   </Box>
                                 </Stack>
 
@@ -581,7 +1218,7 @@ export function App() {
                                       isUpdating ? (
                                         <CircularProgress size={16} color="inherit" />
                                       ) : isComplete ? (
-                                        <AutorenewRoundedIcon />
+                                        <CircleRoundedIcon />
                                       ) : (
                                         <DoneRoundedIcon />
                                       )
