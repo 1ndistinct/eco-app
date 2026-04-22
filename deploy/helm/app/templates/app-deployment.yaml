@@ -20,7 +20,7 @@ spec:
             - containerPort: {{ .Values.service.appPort }}
           env:
             - name: DATABASE_URL
-              value: "postgres://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@{{ include "app.postgresServiceName" . }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}?sslmode=disable"
+              value: {{ include "app.databaseURL" . | quote }}
             - name: NATS_URL
               value: "nats://{{ include "app.natsServiceName" . }}:{{ .Values.nats.port }}"
           readinessProbe:

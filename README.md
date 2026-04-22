@@ -6,6 +6,11 @@ This repository is the standard multi-service starting point for echo-agentic-to
 - services/app: Go backend
 - services/web: React frontend
 
+## Data
+- Todos are stored in Postgres.
+- Goose migrations are embedded in the backend image.
+- Helm deploys a migration Job before the app becomes ready, and the app waits for the latest migration version on startup.
+
 ## Quick Start
 - task setup
 - task test

@@ -16,8 +16,9 @@ tasks:
       - pnpm --dir services/web install --no-frozen-lockfile
 
   dev:
-    desc: Run the backend API locally
+    desc: Run the backend API locally against Postgres
     cmds:
+      - go run ./services/app/cmd/api migrate
       - go run ./services/app/cmd/api
 
   test:backend:

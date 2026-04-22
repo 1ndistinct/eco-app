@@ -21,3 +21,11 @@
 {{- define "app.natsServiceName" -}}
 {{ include "app.fullname" . }}-nats
 {{- end -}}
+
+{{- define "app.appMigrationJobName" -}}
+{{ include "app.fullname" . }}-app-migrate-{{ .Release.Revision }}
+{{- end -}}
+
+{{- define "app.databaseURL" -}}
+postgres://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@{{ include "app.postgresServiceName" . }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}?sslmode=disable
+{{- end -}}

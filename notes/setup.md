@@ -22,6 +22,8 @@ Use Taskfile commands for echo-agentic-todo-postfix-20260411210213.
 The agent-oriented BuildKit path uses task deploy and pushes to k3d-echo-registry.localhost:5000 by default.
 The human Docker path uses task deploy:docker and pushes to localhost:5001 by default so a host Docker daemon can publish into the same local k3d registry.
 Set PUSH_REGISTRY and CLUSTER_REGISTRY together when you want Docker pushes and cluster pulls to use a different registry.
+The backend now requires `DATABASE_URL` for local runtime; `task dev` runs the embedded goose migrations first and then starts the API.
+The Helm chart runs the same migration entrypoint as a dedicated Kubernetes Job, and the API waits for the latest migration version before it serves traffic.
 Default external routing uses one Traefik host with path-based endpoints:
 - frontend: http://app.localhost/
 - backend: http://app.localhost/api/healthz

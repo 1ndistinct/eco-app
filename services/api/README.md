@@ -54,4 +54,6 @@ Backend owns the initial service contract handoff for the first vertical slice.
 - Treat `id` as an opaque string.
 - Render items in response order.
 - Expect `completed` to always be present.
-- Current backend storage is in-memory and resets on process restart.
+- Todos are stored in Postgres.
+- Schema changes are managed with embedded goose migrations.
+- The Helm deploy runs migrations in a dedicated Job, and the app waits for the latest migration before serving traffic.
