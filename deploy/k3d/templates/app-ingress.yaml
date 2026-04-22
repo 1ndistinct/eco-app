@@ -1,4 +1,6 @@
 {{- if .Values.ingress.enabled }}
+{{- $fullname := include "app.fullname" . -}}
+{{- $host := default (printf "%s.localhost" $fullname) .Values.ingress.host -}}
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -10,12 +12,12 @@ spec:
 {{- end }}
   routes:
     - kind: Rule
-      match: ({{ include "app.ingressHostMatch" . }}) && PathPrefix(`{{ .Values.ingress.apiPathPrefix }}`)
+      match: Host(`{{ $host }}`) && PathPrefix(`{{ .Values.ingress.apiPathPrefix }}`)
       services:
         - name: {{ include "app.appServiceName" . }}
           port: {{ .Values.service.appPort }}
     - kind: Rule
-      match: ({{ include "app.ingressHostMatch" . }}) && PathPrefix(`/`)
+      match: Host(`{{ $host }}`) && PathPrefix(`/`)
       services:
         - name: {{ include "app.webServiceName" . }}
           port: {{ .Values.service.webPort }}

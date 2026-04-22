@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "app.postgresServiceName" . }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ include "app.postgresServiceName" . }}
+  ports:
+    - name: postgres
+      port: {{ .Values.postgres.port }}
+      targetPort: {{ .Values.postgres.port }}

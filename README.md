@@ -31,9 +31,9 @@ This repository is the standard multi-service starting point for echo-agentic-to
 - tilt ci
 
 ## External URLs
-- Frontend: http://app.localhost/
-- Backend API: http://app.localhost/api/healthz
-- Override the ingress host for non-localhost-dev machines with `INGRESS_HOST=localhost`.
+- Frontend: http://192.168.1.84/
+- Backend API: http://192.168.1.84/api/healthz
+- Override the ingress host for another machine with `INGRESS_HOST=<host>`.
 
 ## Auth
 - The UI now requires login before any todo data is shown.
@@ -42,11 +42,12 @@ This repository is the standard multi-service starting point for echo-agentic-to
 ## Ingress
 - `task deploy:docker` deploys both services behind a single-host Traefik `IngressRoute`.
 - `task k3d:bootstrap` creates the expected `echo` k3d cluster and `echo-registry.localhost` registry.
+- `deploy/k3d/local.values.yaml` sets the default k3d ingress host to `192.168.1.84`.
 - `task test:e2e` runs a browser flow against the same public host and real backend.
 - `task ci` and `tilt ci` both include the host probes plus `task test:e2e` for deployed validation.
 - `task ci` falls back to `task deploy:docker` automatically when local BuildKit is unavailable.
-- `task probe:app:external` verifies `http://app.localhost/api/healthz`
-- `task probe:web:external` verifies `http://app.localhost/`
+- `task probe:app:external` verifies `http://192.168.1.84/api/healthz`
+- `task probe:web:external` verifies `http://192.168.1.84/`
 
 ## Notes
 - notes/index.md

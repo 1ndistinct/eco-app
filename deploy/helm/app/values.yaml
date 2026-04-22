@@ -24,6 +24,7 @@ nats:
 ingress:
   enabled: true
   host: ""
+  hosts: []
   entryPoints:
     - web
   apiPathPrefix: /api

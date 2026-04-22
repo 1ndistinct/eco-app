@@ -72,7 +72,7 @@ tasks:
       - task install
       - |
         sh -c 'set -eu; \
-        host="${INGRESS_HOST:-${APP_RELEASE_NAME:-app}.localhost}"; \
+        host="${INGRESS_HOST:-192.168.1.84}"; \
         PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-http://$host}" pnpm --dir services/web test:e2e'
 
   lint:backend:
@@ -192,11 +192,15 @@ tasks:
         ns="${APP_NAMESPACE:-app-system}"; \
         release="${APP_RELEASE_NAME:-app}"; \
         host="${INGRESS_HOST:-}"; \
+        ingress_arg=""; \
+        if [ -n "$host" ]; then \
+          ingress_arg="--set-string ingress.host=$host"; \
+        fi; \
         registry="${CLUSTER_REGISTRY:-k3d-echo-registry.localhost:5000}"; \
         tag="${IMAGE_TAG:-dev}"; \
         helm template "$release" ./deploy/helm/app -f ./deploy/k3d/local.values.yaml \
           --namespace "$ns" \
-          --set-string ingress.host="$host" \
+          $ingress_arg \
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
@@ -212,13 +216,17 @@ tasks:
         ns="${APP_NAMESPACE:-app-system}"; \
         release="${APP_RELEASE_NAME:-app}"; \
         host="${INGRESS_HOST:-}"; \
+        ingress_arg=""; \
+        if [ -n "$host" ]; then \
+          ingress_arg="--set-string ingress.host=$host"; \
+        fi; \
         registry="${CLUSTER_REGISTRY:-k3d-echo-registry.localhost:5000}"; \
         tag="${IMAGE_TAG:-dev}"; \
         helm upgrade --install "$release" ./deploy/helm/app -f ./deploy/k3d/local.values.yaml \
           --namespace "$ns" \
           --create-namespace \
           --wait --timeout "${DEPLOY_TIMEOUT:-5m}" \
-          --set-string ingress.host="$host" \
+          $ingress_arg \
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
@@ -238,13 +246,17 @@ tasks:
         ns="${APP_NAMESPACE:-app-system}"; \
         release="${APP_RELEASE_NAME:-app}"; \
         host="${INGRESS_HOST:-}"; \
+        ingress_arg=""; \
+        if [ -n "$host" ]; then \
+          ingress_arg="--set-string ingress.host=$host"; \
+        fi; \
         registry="${CLUSTER_REGISTRY:-k3d-echo-registry.localhost:5000}"; \
         tag="${IMAGE_TAG:-dev}"; \
         helm upgrade --install "$release" ./deploy/helm/app -f ./deploy/k3d/local.values.yaml \
           --namespace "$ns" \
           --create-namespace \
           --wait --timeout "${DEPLOY_TIMEOUT:-5m}" \
-          --set-string ingress.host="$host" \
+          $ingress_arg \
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
@@ -296,7 +308,7 @@ tasks:
       - |
         sh -c 'set -eu; \
         release="${APP_RELEASE_NAME:-app}"; \
-        host="${INGRESS_HOST:-$release.localhost}"; \
+        host="${INGRESS_HOST:-192.168.1.84}"; \
         printf "frontend: http://%s/\nbackend: http://%s/api/healthz\n" "$host" "$host"'
 
   logs:
@@ -333,7 +345,7 @@ tasks:
       - |
         sh -c 'set -eu; \
         release="${APP_RELEASE_NAME:-app}"; \
-        host="${INGRESS_HOST:-$release.localhost}"; \
+        host="${INGRESS_HOST:-192.168.1.84}"; \
         curl --retry "${PROBE_RETRIES:-20}" --retry-delay 1 --retry-all-errors -fsS "http://$host/api/healthz"'
 
   probe:web:external:
@@ -342,7 +354,7 @@ tasks:
       - |
         sh -c 'set -eu; \
         release="${APP_RELEASE_NAME:-app}"; \
-        host="${INGRESS_HOST:-$release.localhost}"; \
+        host="${INGRESS_HOST:-192.168.1.84}"; \
         curl --retry "${PROBE_RETRIES:-20}" --retry-delay 1 --retry-all-errors -fsS "http://$host/" >/dev/null'
 
   tilt:up:
