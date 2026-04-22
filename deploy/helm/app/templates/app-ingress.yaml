@@ -1,60 +1,22 @@
-{{- $fullname := include "app.fullname" . -}}
-{{- if .Values.ingress.web.enabled }}
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+{{- if .Values.ingress.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
 metadata:
-  name: {{ include "app.webServiceName" . }}
-  annotations:
-{{- with .Values.ingress.annotations }}
-{{ toYaml . | nindent 4 }}
-{{- end }}
+  name: {{ include "app.fullname" . }}
 spec:
-{{- with .Values.ingress.className }}
-  ingressClassName: {{ . }}
+  entryPoints:
+{{- range .Values.ingress.entryPoints }}
+    - {{ . }}
 {{- end }}
-  rules:
-    - host: {{ default (printf "%s.localhost" $fullname) .Values.ingress.web.host | quote }}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ include "app.webServiceName" . }}
-                port:
-                  number: {{ .Values.service.webPort }}
-{{- with .Values.ingress.tls }}
-  tls:
-{{ toYaml . | nindent 4 }}
-{{- end }}
-{{- end }}
-{{- if .Values.ingress.app.enabled }}
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: {{ include "app.appServiceName" . }}
-  annotations:
-{{- with .Values.ingress.annotations }}
-{{ toYaml . | nindent 4 }}
-{{- end }}
-spec:
-{{- with .Values.ingress.className }}
-  ingressClassName: {{ . }}
-{{- end }}
-  rules:
-    - host: {{ default (printf "api.%s.localhost" $fullname) .Values.ingress.app.host | quote }}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ include "app.appServiceName" . }}
-                port:
-                  number: {{ .Values.service.appPort }}
-{{- with .Values.ingress.tls }}
-  tls:
-{{ toYaml . | nindent 4 }}
-{{- end }}
+  routes:
+    - kind: Rule
+      match: ({{ include "app.ingressHostMatch" . }}) && PathPrefix(`{{ .Values.ingress.apiPathPrefix }}`)
+      services:
+        - name: {{ include "app.appServiceName" . }}
+          port: {{ .Values.service.appPort }}
+    - kind: Rule
+      match: ({{ include "app.ingressHostMatch" . }}) && PathPrefix(`/`)
+      services:
+        - name: {{ include "app.webServiceName" . }}
+          port: {{ .Values.service.webPort }}
 {{- end }}

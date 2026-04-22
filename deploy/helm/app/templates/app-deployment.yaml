@@ -20,9 +20,15 @@ spec:
             - containerPort: {{ .Values.service.appPort }}
           env:
             - name: DATABASE_URL
-              value: "postgres://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@{{ include "app.postgresServiceName" . }}:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}?sslmode=disable"
+              value: {{ include "app.databaseURL" . | quote }}
             - name: NATS_URL
               value: "nats://{{ include "app.natsServiceName" . }}:{{ .Values.nats.port }}"
+            - name: GOOGLE_OAUTH_CLIENT_ID
+              value: {{ .Values.googleOAuth.clientID | quote }}
+            - name: GOOGLE_OAUTH_CLIENT_SECRET
+              value: {{ .Values.googleOAuth.clientSecret | quote }}
+            - name: GOOGLE_OAUTH_PUBLIC_BASE_URL
+              value: {{ .Values.googleOAuth.publicBaseURL | quote }}
           readinessProbe:
             httpGet:
               path: /healthz
