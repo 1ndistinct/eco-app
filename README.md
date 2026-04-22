@@ -31,23 +31,24 @@ This repository is the standard multi-service starting point for echo-agentic-to
 - tilt ci
 
 ## External URLs
-- Frontend: http://192.168.1.84/
-- Backend API: http://192.168.1.84/api/healthz
-- Override the ingress host for another machine with `INGRESS_HOST=<host>`.
+- Local frontend: http://eco.localhost/
+- Local backend API: http://eco.localhost/api/healthz
+- `deploy/k3d/tm.values.yaml` adds `192.168.1.84` and `eco.treehousehl.com` for the `tm` box.
+- Override the ingress host for a one-off run with `INGRESS_HOST=<host>`.
 
 ## Auth
 - The UI now requires login before any todo data is shown.
 - Provisioned users receive an auto-generated password and must reset it on first login.
 
 ## Ingress
-- `task deploy:docker` deploys both services behind a single-host Traefik `IngressRoute`.
+- `task deploy:docker` deploys both services behind a Traefik `IngressRoute`.
 - `task k3d:bootstrap` creates the expected `echo` k3d cluster and `echo-registry.localhost` registry.
-- `deploy/k3d/local.values.yaml` sets the default k3d ingress host to `192.168.1.84`.
+- `deploy/k3d/local.values.yaml` is the default local-machine k3d values file.
+- `deploy/k3d/tm.values.yaml` is the `tm`-specific k3d values file.
 - `task test:e2e` runs a browser flow against the same public host and real backend.
 - `task ci` and `tilt ci` both include the host probes plus `task test:e2e` for deployed validation.
 - `task ci` falls back to `task deploy:docker` automatically when local BuildKit is unavailable.
-- `task probe:app:external` verifies `http://192.168.1.84/api/healthz`
-- `task probe:web:external` verifies `http://192.168.1.84/`
+- Set `K3D_VALUES_FILE=./deploy/k3d/tm.values.yaml` on `tm` to deploy and probe against `192.168.1.84`.
 
 ## Notes
 - notes/index.md

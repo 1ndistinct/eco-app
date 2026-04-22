@@ -9,4 +9,4 @@ images:
     pullPolicy: Always
 
 ingress:
-  host: app.localhost
+  host: eco.localhost

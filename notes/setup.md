@@ -29,10 +29,14 @@ The backend now requires `DATABASE_URL` for local runtime; `task dev` runs the e
 The Helm chart runs the same migration entrypoint as a dedicated Kubernetes Job, and the API waits for the latest migration version before it serves traffic.
 Users are provisioned explicitly. Use `go run ./services/app/cmd/api create-user <email>` against a local database, or `EMAIL=<email> task user:create:cluster` against the deployed cluster. The command prints the generated temporary password, and the user must reset it on first login.
 Default external routing uses one Traefik host with path-based endpoints:
+- local frontend: http://eco.localhost/
+- local backend: http://eco.localhost/api/healthz
+The local-machine k3d environment default lives in `deploy/k3d/local.values.yaml`.
+Use `K3D_VALUES_FILE=./deploy/k3d/tm.values.yaml` on `tm` to deploy with:
 - frontend: http://192.168.1.84/
 - backend: http://192.168.1.84/api/healthz
-The k3d environment default lives in `deploy/k3d/local.values.yaml`.
-Set `INGRESS_HOST=<host>` when you want the deployed app to answer on a different host.
+- alias: http://eco.treehousehl.com/
+Set `INGRESS_HOST=<host>` when you want to force a single ingress host for a one-off run.
 Use task probe:app:external and task probe:web:external to verify the ingress path from the host.
 The default repo validation paths now run the browser flow as well:
 - `task ci`
