@@ -15,6 +15,29 @@ tasks:
     cmds:
       - pnpm --dir services/web install --no-frozen-lockfile
 
+  k3d:bootstrap:
+    desc: Create the local k3d registry and cluster if they do not already exist
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        registry_name="${K3D_REGISTRY_NAME:-echo-registry.localhost}"; \
+        registry_node_name="$registry_name"; \
+        case "$registry_node_name" in \
+          k3d-*) ;; \
+          *) registry_node_name="k3d-$registry_node_name" ;; \
+        esac; \
+        cluster_name="${K3D_CLUSTER_NAME:-echo}"; \
+        ingress_port="${APP_INGRESS_PORT:-80}"; \
+        registry_port="${PUSH_REGISTRY_PORT:-5001}"; \
+        if ! k3d registry list | awk "NR > 1 { print \$1 }" | grep -qx "$registry_node_name"; then \
+          k3d registry create "$registry_name" --port "$registry_port"; \
+        fi; \
+        if ! k3d cluster list | awk "NR > 1 { print \$1 }" | grep -qx "$cluster_name"; then \
+          k3d cluster create "$cluster_name" --servers 1 --agents 0 --wait \
+            --registry-use "k3d-$registry_name:5000" \
+            -p "$ingress_port:80@loadbalancer"; \
+        fi'
+
   dev:
     desc: Run the backend API locally against Postgres
     cmds:
@@ -47,7 +70,10 @@ tasks:
     desc: Run browser end-to-end tests against the deployed app
     cmds:
       - task install
-      - sh -c 'PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-http://app.localhost}" pnpm --dir services/web test:e2e'
+      - |
+        sh -c 'set -eu; \
+        host="${INGRESS_HOST:-${APP_RELEASE_NAME:-app}.localhost}"; \
+        PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-http://$host}" pnpm --dir services/web test:e2e'
 
   lint:backend:
     desc: Run backend formatting checks
@@ -165,10 +191,12 @@ tasks:
         sh -c 'set -eu; \
         ns="${APP_NAMESPACE:-app-system}"; \
         release="${APP_RELEASE_NAME:-app}"; \
+        host="${INGRESS_HOST:-}"; \
         registry="${CLUSTER_REGISTRY:-k3d-echo-registry.localhost:5000}"; \
         tag="${IMAGE_TAG:-dev}"; \
         helm template "$release" ./deploy/helm/app -f ./deploy/k3d/local.values.yaml \
           --namespace "$ns" \
+          --set-string ingress.host="$host" \
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
@@ -183,11 +211,14 @@ tasks:
         sh -c 'set -eu; \
         ns="${APP_NAMESPACE:-app-system}"; \
         release="${APP_RELEASE_NAME:-app}"; \
+        host="${INGRESS_HOST:-}"; \
         registry="${CLUSTER_REGISTRY:-k3d-echo-registry.localhost:5000}"; \
         tag="${IMAGE_TAG:-dev}"; \
         helm upgrade --install "$release" ./deploy/helm/app -f ./deploy/k3d/local.values.yaml \
           --namespace "$ns" \
+          --create-namespace \
           --wait --timeout "${DEPLOY_TIMEOUT:-5m}" \
+          --set-string ingress.host="$host" \
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
@@ -206,11 +237,14 @@ tasks:
         sh -c 'set -eu; \
         ns="${APP_NAMESPACE:-app-system}"; \
         release="${APP_RELEASE_NAME:-app}"; \
+        host="${INGRESS_HOST:-}"; \
         registry="${CLUSTER_REGISTRY:-k3d-echo-registry.localhost:5000}"; \
         tag="${IMAGE_TAG:-dev}"; \
         helm upgrade --install "$release" ./deploy/helm/app -f ./deploy/k3d/local.values.yaml \
           --namespace "$ns" \
+          --create-namespace \
           --wait --timeout "${DEPLOY_TIMEOUT:-5m}" \
+          --set-string ingress.host="$host" \
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
@@ -262,7 +296,8 @@ tasks:
       - |
         sh -c 'set -eu; \
         release="${APP_RELEASE_NAME:-app}"; \
-        printf "frontend: http://%s.localhost/\nbackend: http://%s.localhost/api/healthz\n" "$release" "$release"'
+        host="${INGRESS_HOST:-$release.localhost}"; \
+        printf "frontend: http://%s/\nbackend: http://%s/api/healthz\n" "$host" "$host"'
 
   logs:
     desc: "Stream deployment logs (for example: task logs -- web)"
@@ -298,7 +333,8 @@ tasks:
       - |
         sh -c 'set -eu; \
         release="${APP_RELEASE_NAME:-app}"; \
-        curl --retry "${PROBE_RETRIES:-20}" --retry-delay 1 --retry-all-errors -fsS "http://${release}.localhost/api/healthz"'
+        host="${INGRESS_HOST:-$release.localhost}"; \
+        curl --retry "${PROBE_RETRIES:-20}" --retry-delay 1 --retry-all-errors -fsS "http://$host/api/healthz"'
 
   probe:web:external:
     desc: Probe the frontend root through ingress from the host
@@ -306,7 +342,8 @@ tasks:
       - |
         sh -c 'set -eu; \
         release="${APP_RELEASE_NAME:-app}"; \
-        curl --retry "${PROBE_RETRIES:-20}" --retry-delay 1 --retry-all-errors -fsS "http://${release}.localhost/" >/dev/null'
+        host="${INGRESS_HOST:-$release.localhost}"; \
+        curl --retry "${PROBE_RETRIES:-20}" --retry-delay 1 --retry-all-errors -fsS "http://$host/" >/dev/null'
 
   tilt:up:
     desc: Start the local Tilt session using the Docker deploy path

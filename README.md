@@ -15,6 +15,7 @@ This repository is the standard multi-service starting point for echo-agentic-to
 
 ## Quick Start
 - task setup
+- task k3d:bootstrap
 - EMAIL=user@example.com task user:create:cluster
 - task test
 - task test:e2e
@@ -32,6 +33,7 @@ This repository is the standard multi-service starting point for echo-agentic-to
 ## External URLs
 - Frontend: http://app.localhost/
 - Backend API: http://app.localhost/api/healthz
+- Override the ingress host for non-localhost-dev machines with `INGRESS_HOST=localhost`.
 
 ## Auth
 - The UI now requires login before any todo data is shown.
@@ -39,6 +41,7 @@ This repository is the standard multi-service starting point for echo-agentic-to
 
 ## Ingress
 - `task deploy:docker` deploys both services behind a single-host Traefik `IngressRoute`.
+- `task k3d:bootstrap` creates the expected `echo` k3d cluster and `echo-registry.localhost` registry.
 - `task test:e2e` runs a browser flow against the same public host and real backend.
 - `task ci` and `tilt ci` both include the host probes plus `task test:e2e` for deployed validation.
 - `task ci` falls back to `task deploy:docker` automatically when local BuildKit is unavailable.

@@ -1,28 +1,21 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="leafFill" x1="306" y1="186" x2="744" y2="834" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7FB693"/>
-      <stop offset="0.52" stop-color="#4E8B6C"/>
-      <stop offset="1" stop-color="#234E3D"/>
+      <stop stop-color="#76AA87"/>
+      <stop offset="0.52" stop-color="#3F715A"/>
+      <stop offset="1" stop-color="#1D3C32"/>
     </linearGradient>
   </defs>
 
-  <g transform="rotate(-12 512 512)">
+  <g transform="rotate(-8 512 512)">
     <path
-      d="M527 108C667 128 779 230 828 372C864 477 862 595 812 700C751 826 646 914 512 952C378 914 273 826 212 700C162 595 160 477 196 372C245 230 357 128 497 108C507 106 517 106 527 108Z"
+      d="M516 78C645 111 741 208 801 348C852 468 856 612 807 736C748 883 651 959 516 1020C381 959 284 883 225 736C176 612 180 468 231 348C291 208 387 111 516 78Z"
       fill="url(#leafFill)"
     />
     <path
-      d="M513 232C553 387 551 555 507 792"
+      d="M510 214C542 367 545 549 520 826"
       stroke="#F3E7D5"
       stroke-width="30"
-      stroke-linecap="round"
-    />
-    <path
-      d="M528 466C612 434 676 384 732 312"
-      stroke="#F3E7D5"
-      stroke-opacity="0.86"
-      stroke-width="18"
       stroke-linecap="round"
     />
   </g>

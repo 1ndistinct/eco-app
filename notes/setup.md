@@ -4,6 +4,7 @@ Use Taskfile commands for echo-agentic-todo-postfix-20260411210213.
 
 - task setup
 - task install
+- task k3d:bootstrap
 - EMAIL=user@example.com task user:create:cluster
 - task test:backend
 - task test:frontend
@@ -23,12 +24,14 @@ Use Taskfile commands for echo-agentic-todo-postfix-20260411210213.
 The agent-oriented BuildKit path uses task deploy and pushes to k3d-echo-registry.localhost:5000 by default.
 The human Docker path uses task deploy:docker and pushes to localhost:5001 by default so a host Docker daemon can publish into the same local k3d registry.
 Set PUSH_REGISTRY and CLUSTER_REGISTRY together when you want Docker pushes and cluster pulls to use a different registry.
+Use `task k3d:bootstrap` to create the expected `echo` cluster and `echo-registry.localhost` registry on a fresh machine.
 The backend now requires `DATABASE_URL` for local runtime; `task dev` runs the embedded goose migrations first and then starts the API.
 The Helm chart runs the same migration entrypoint as a dedicated Kubernetes Job, and the API waits for the latest migration version before it serves traffic.
 Users are provisioned explicitly. Use `go run ./services/app/cmd/api create-user <email>` against a local database, or `EMAIL=<email> task user:create:cluster` against the deployed cluster. The command prints the generated temporary password, and the user must reset it on first login.
 Default external routing uses one Traefik host with path-based endpoints:
 - frontend: http://app.localhost/
 - backend: http://app.localhost/api/healthz
+Set `INGRESS_HOST=localhost` when you want the deployed app to answer on `http://localhost/` instead of `http://app.localhost/`.
 Use task probe:app:external and task probe:web:external to verify the ingress path from the host.
 The default repo validation paths now run the browser flow as well:
 - `task ci`
