@@ -13,9 +13,11 @@ import (
 )
 
 const (
-	sessionCookieName = "todo_session"
-	sessionLifetime   = 7 * 24 * time.Hour
-	minPasswordLength = 12
+	sessionCookieName         = "todo_session"
+	googleStateCookieName     = "todo_google_oauth_state"
+	sessionLifetime           = 7 * 24 * time.Hour
+	googleStateCookieLifetime = 10 * time.Minute
+	minPasswordLength         = 12
 )
 
 func normalizeEmail(email string) string {
@@ -88,6 +90,31 @@ func clearSessionCookie() *http.Cookie {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	}
+}
+
+func newGoogleStateCookie(state string, secure bool) *http.Cookie {
+	return &http.Cookie{
+		Name:     googleStateCookieName,
+		Value:    state,
+		Path:     "/api/auth/google/callback",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+		MaxAge:   int(googleStateCookieLifetime.Seconds()),
+	}
+}
+
+func clearGoogleStateCookie(secure bool) *http.Cookie {
+	return &http.Cookie{
+		Name:     googleStateCookieName,
+		Value:    "",
+		Path:     "/api/auth/google/callback",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	}

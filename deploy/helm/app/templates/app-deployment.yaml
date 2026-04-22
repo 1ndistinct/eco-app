@@ -23,6 +23,12 @@ spec:
               value: {{ include "app.databaseURL" . | quote }}
             - name: NATS_URL
               value: "nats://{{ include "app.natsServiceName" . }}:{{ .Values.nats.port }}"
+            - name: GOOGLE_OAUTH_CLIENT_ID
+              value: {{ .Values.googleOAuth.clientID | quote }}
+            - name: GOOGLE_OAUTH_CLIENT_SECRET
+              value: {{ .Values.googleOAuth.clientSecret | quote }}
+            - name: GOOGLE_OAUTH_PUBLIC_BASE_URL
+              value: {{ .Values.googleOAuth.publicBaseURL | quote }}
           readinessProbe:
             httpGet:
               path: /healthz

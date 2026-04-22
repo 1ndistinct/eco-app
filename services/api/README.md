@@ -10,12 +10,18 @@ Backend owns the initial service contract handoff for the first vertical slice.
 ### `GET /api/auth/session`
 - response when signed out: `200 application/json`
 ```json
-{"authenticated":false}
+{
+  "authenticated": false,
+  "googleLoginEnabled": true,
+  "googleLoginURL": "https://eco.treehousehl.com/api/auth/google/start"
+}
 ```
 - response when signed in: `200 application/json`
 ```json
 {
   "authenticated": true,
+  "googleLoginEnabled": true,
+  "googleLoginURL": "https://eco.treehousehl.com/api/auth/google/start",
   "user": {
     "email": "owner@example.com",
     "passwordResetRequired": false
@@ -28,6 +34,23 @@ Backend owns the initial service contract handoff for the first vertical slice.
   ]
 }
 ```
+
+### `GET /api/auth/google/start`
+- response: `303`
+- side effect: redirects the browser to Google OAuth
+- requirements:
+  - Google OAuth must be configured
+  - the eventual Google account email must be a verified Gmail address
+  - that Gmail address must exactly match an existing provisioned user
+
+### `GET /api/auth/google/callback`
+- response: `303`
+- side effects:
+  - exchanges the Google authorization code
+  - looks up the verified Google email
+  - sets the normal HTTP-only session cookie when that email already exists in `users`
+- failure behavior:
+  - redirects back to `/` with `?authError=...`
 
 ### `POST /api/auth/login`
 - request: `application/json`
@@ -172,6 +195,9 @@ Todos are scoped to a workspace owned by a user. Each todo keeps both:
 - Treat `id` as an opaque string.
 - Use `GET /api/auth/session` as the bootstrap source of truth.
 - Provisioned users will log in once, then immediately complete the password reset flow before any todo or share actions are allowed.
+- Google login is available only when the backend reports `googleLoginEnabled: true`.
+- Google login only succeeds for a verified Gmail address that exactly matches an existing provisioned user.
+- A successful Google login also clears the initial password-reset requirement for that user.
 - Todos and sessions are stored in Postgres.
 - Passwords are stored as hashes only.
 - Schema changes are managed with embedded goose migrations.

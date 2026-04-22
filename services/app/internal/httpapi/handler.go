@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+
+	"golang.org/x/oauth2"
 )
 
 type createTodoRequest struct {
@@ -47,16 +49,31 @@ type shareListResponse struct {
 }
 
 type handler struct {
-	store AppStore
+	store      AppStore
+	googleAuth GoogleAuthConfig
 }
 
-func NewHandler(store AppStore) http.Handler {
-	h := &handler{store: store}
+type HandlerOptions struct {
+	GoogleAuth GoogleAuthConfig
+}
+
+func NewHandler(store AppStore, options ...HandlerOptions) http.Handler {
+	var resolved HandlerOptions
+	if len(options) > 0 {
+		resolved = options[0]
+	}
+
+	h := &handler{
+		store:      store,
+		googleAuth: resolved.GoogleAuth,
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthzHandler)
 	mux.HandleFunc("/api/healthz", healthzHandler)
 	mux.HandleFunc("/api/auth/session", h.handleSession)
 	mux.HandleFunc("/api/auth/login", h.handleLogin)
+	mux.HandleFunc("/api/auth/google/start", h.handleGoogleLoginStart)
+	mux.HandleFunc("/api/auth/google/callback", h.handleGoogleLoginCallback)
 	mux.HandleFunc("/api/auth/logout", h.handleLogout)
 	mux.HandleFunc("/api/auth/reset-password", h.handleResetPassword)
 	mux.HandleFunc("/api/todos", h.handleTodos)
@@ -75,7 +92,7 @@ func (h *handler) handleSession(w http.ResponseWriter, r *http.Request) {
 	user, err := h.currentUser(r.Context(), r)
 	if errors.Is(err, ErrSessionNotFound) {
 		http.SetCookie(w, clearSessionCookie())
-		writeJSON(w, http.StatusOK, SessionState{Authenticated: false})
+		writeJSON(w, http.StatusOK, h.unauthenticatedSessionState())
 		return
 	}
 	if err != nil {
@@ -83,7 +100,7 @@ func (h *handler) handleSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user == nil {
-		writeJSON(w, http.StatusOK, SessionState{Authenticated: false})
+		writeJSON(w, http.StatusOK, h.unauthenticatedSessionState())
 		return
 	}
 
@@ -143,6 +160,123 @@ func (h *handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, state)
+}
+
+func (h *handler) handleGoogleLoginStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+		return
+	}
+
+	if !h.googleAuth.Enabled() {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_login_unavailable"), http.StatusSeeOther)
+		return
+	}
+
+	state, err := generateSecretString(24)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+		return
+	}
+
+	secureCookies := h.googleAuth.SecureCookies(r)
+	http.SetCookie(w, newGoogleStateCookie(state, secureCookies))
+
+	redirectURL := h.googleAuth.OAuth2Config(r).AuthCodeURL(
+		state,
+		oauth2.AccessTypeOnline,
+		oauth2.SetAuthURLParam("prompt", "select_account"),
+	)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+}
+
+func (h *handler) handleGoogleLoginCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+		return
+	}
+
+	if !h.googleAuth.Enabled() {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_login_unavailable"), http.StatusSeeOther)
+		return
+	}
+
+	if authError := strings.TrimSpace(r.URL.Query().Get("error")); authError != "" {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_login_cancelled"), http.StatusSeeOther)
+		return
+	}
+
+	secureCookies := h.googleAuth.SecureCookies(r)
+	defer http.SetCookie(w, clearGoogleStateCookie(secureCookies))
+
+	stateCookie, err := r.Cookie(googleStateCookieName)
+	if err != nil || strings.TrimSpace(stateCookie.Value) == "" {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_login_expired"), http.StatusSeeOther)
+		return
+	}
+
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	code := strings.TrimSpace(r.URL.Query().Get("code"))
+	if state == "" || code == "" || state != stateCookie.Value {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_login_expired"), http.StatusSeeOther)
+		return
+	}
+
+	oauthConfig := h.googleAuth.OAuth2Config(r)
+	token, err := oauthConfig.Exchange(r.Context(), code)
+	if err != nil {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_login_failed"), http.StatusSeeOther)
+		return
+	}
+
+	client := oauthConfig.Client(r.Context(), token)
+	userInfoResponse, err := client.Get(h.googleAuth.UserInfoURL())
+	if err != nil {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_login_failed"), http.StatusSeeOther)
+		return
+	}
+	defer userInfoResponse.Body.Close()
+
+	if userInfoResponse.StatusCode != http.StatusOK {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_login_failed"), http.StatusSeeOther)
+		return
+	}
+
+	var userInfo googleUserInfo
+	if err := json.NewDecoder(userInfoResponse.Body).Decode(&userInfo); err != nil {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_login_failed"), http.StatusSeeOther)
+		return
+	}
+
+	if !userInfo.EmailVerified || strings.TrimSpace(userInfo.Email) == "" {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_email_not_verified"), http.StatusSeeOther)
+		return
+	}
+	if !isSupportedGoogleLoginEmail(userInfo.Email) {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_email_not_supported"), http.StatusSeeOther)
+		return
+	}
+
+	user, err := h.store.AuthenticateGoogleUser(r.Context(), userInfo.Email)
+	if errors.Is(err, ErrUserNotFound) {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_account_not_allowed"), http.StatusSeeOther)
+		return
+	}
+	if err != nil {
+		http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, "google_login_failed"), http.StatusSeeOther)
+		return
+	}
+
+	sessionToken, err := h.store.CreateSession(r.Context(), user.Email)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+		return
+	}
+
+	http.SetCookie(w, newSessionCookie(sessionToken))
+	http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, ""), http.StatusSeeOther)
 }
 
 func (h *handler) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -423,9 +557,19 @@ func (h *handler) buildSessionState(ctx context.Context, user SessionUser) (Sess
 
 	return SessionState{
 		Authenticated:        true,
+		GoogleLoginEnabled:   h.googleAuth.Enabled(),
+		GoogleLoginURL:       h.googleAuth.LoginURL(),
 		User:                 &user,
 		AccessibleWorkspaces: workspaces,
 	}, nil
+}
+
+func (h *handler) unauthenticatedSessionState() SessionState {
+	return SessionState{
+		Authenticated:      false,
+		GoogleLoginEnabled: h.googleAuth.Enabled(),
+		GoogleLoginURL:     h.googleAuth.LoginURL(),
+	}
 }
 
 func (h *handler) workspaceFromQuery(r *http.Request, fallback string) string {

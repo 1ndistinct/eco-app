@@ -21,6 +21,11 @@ postgres:
 nats:
   port: 4222
 
+googleOAuth:
+  clientID: ""
+  clientSecret: ""
+  publicBaseURL: ""
+
 ingress:
   enabled: true
   host: ""

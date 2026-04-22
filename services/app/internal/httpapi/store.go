@@ -35,12 +35,15 @@ type ProvisionedUser struct {
 
 type SessionState struct {
 	Authenticated        bool              `json:"authenticated"`
+	GoogleLoginEnabled   bool              `json:"googleLoginEnabled,omitempty"`
+	GoogleLoginURL       string            `json:"googleLoginURL,omitempty"`
 	User                 *SessionUser      `json:"user,omitempty"`
 	AccessibleWorkspaces []WorkspaceAccess `json:"accessibleWorkspaces,omitempty"`
 }
 
 type AppStore interface {
 	AuthenticateUser(ctx context.Context, email string, password string) (SessionUser, error)
+	AuthenticateGoogleUser(ctx context.Context, email string) (SessionUser, error)
 	ResetPassword(ctx context.Context, email string, currentPassword string, newPassword string) (SessionUser, error)
 	CreateSession(ctx context.Context, email string) (string, error)
 	GetSession(ctx context.Context, token string) (SessionUser, error)

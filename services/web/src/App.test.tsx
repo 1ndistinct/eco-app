@@ -46,6 +46,30 @@ describe("App", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/session");
   });
 
+  it("shows the Google login action when the session bootstrap exposes it", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          authenticated: false,
+          googleLoginEnabled: true,
+          googleLoginURL: "https://eco.treehousehl.com/api/auth/google/start",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    render(<App />);
+
+    const googleLink = await screen.findByRole("link", { name: /continue with google/i });
+    expect(googleLink).toHaveAttribute(
+      "href",
+      "https://eco.treehousehl.com/api/auth/google/start",
+    );
+  });
+
   it("logs in and loads the selected workspace", async () => {
     fetchMock
       .mockResolvedValueOnce(

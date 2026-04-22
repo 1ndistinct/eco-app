@@ -30,14 +30,11 @@ func NewPostgresStore(db *sqlx.DB) *PostgresStore {
 }
 
 func (s *PostgresStore) AuthenticateUser(ctx context.Context, email string, password string) (SessionUser, error) {
-	var user userRow
-	if err := s.db.GetContext(ctx, &user, `
-		SELECT email, password_hash, password_reset_required
-		FROM users
-		WHERE email = $1
-	`, normalizeEmail(email)); errors.Is(err, sql.ErrNoRows) {
+	user, err := s.userByEmail(ctx, normalizeEmail(email))
+	if errors.Is(err, sql.ErrNoRows) {
 		return SessionUser{}, ErrInvalidCredentials
-	} else if err != nil {
+	}
+	if err != nil {
 		return SessionUser{}, err
 	}
 
@@ -51,20 +48,48 @@ func (s *PostgresStore) AuthenticateUser(ctx context.Context, email string, pass
 	}, nil
 }
 
+func (s *PostgresStore) AuthenticateGoogleUser(ctx context.Context, email string) (SessionUser, error) {
+	normalizedEmail := normalizeEmail(email)
+	user, err := s.userByEmail(ctx, normalizedEmail)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SessionUser{}, ErrUserNotFound
+	}
+	if err != nil {
+		return SessionUser{}, err
+	}
+
+	if user.PasswordResetRequired {
+		query, args, err := s.builder.
+			Update("users").
+			Set("password_reset_required", false).
+			Where(sq.Eq{"email": normalizedEmail}).
+			ToSql()
+		if err != nil {
+			return SessionUser{}, err
+		}
+		if _, err := s.db.ExecContext(ctx, query, args...); err != nil {
+			return SessionUser{}, err
+		}
+		user.PasswordResetRequired = false
+	}
+
+	return SessionUser{
+		Email:                 user.Email,
+		PasswordResetRequired: user.PasswordResetRequired,
+	}, nil
+}
+
 func (s *PostgresStore) ResetPassword(ctx context.Context, email string, currentPassword string, newPassword string) (SessionUser, error) {
 	if err := validatePassword(newPassword); err != nil {
 		return SessionUser{}, err
 	}
 
-	var user userRow
 	normalizedEmail := normalizeEmail(email)
-	if err := s.db.GetContext(ctx, &user, `
-		SELECT email, password_hash, password_reset_required
-		FROM users
-		WHERE email = $1
-	`, normalizedEmail); errors.Is(err, sql.ErrNoRows) {
+	user, err := s.userByEmail(ctx, normalizedEmail)
+	if errors.Is(err, sql.ErrNoRows) {
 		return SessionUser{}, ErrUserNotFound
-	} else if err != nil {
+	}
+	if err != nil {
 		return SessionUser{}, err
 	}
 
@@ -407,4 +432,17 @@ func (s *PostgresStore) userExists(ctx context.Context, email string) (bool, err
 	}
 
 	return exists, nil
+}
+
+func (s *PostgresStore) userByEmail(ctx context.Context, email string) (userRow, error) {
+	var user userRow
+	if err := s.db.GetContext(ctx, &user, `
+		SELECT email, password_hash, password_reset_required
+		FROM users
+		WHERE email = $1
+	`, email); err != nil {
+		return userRow{}, err
+	}
+
+	return user, nil
 }

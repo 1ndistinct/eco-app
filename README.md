@@ -39,6 +39,9 @@ This repository is the standard multi-service starting point for echo-agentic-to
 ## Auth
 - The UI now requires login before any todo data is shown.
 - Provisioned users receive an auto-generated password and must reset it on first login.
+- Google login is supported for already-provisioned users only when the verified Google account is a Gmail address and exactly matches the stored user email.
+- For the `tm` deployment, set the Google OAuth public base URL to `https://eco.treehousehl.com`.
+- Register `https://eco.treehousehl.com/api/auth/google/callback` as the Google OAuth redirect URI for the `tm` deployment.
 
 ## Ingress
 - `task deploy:docker` deploys both services behind a Traefik `IngressRoute`.

@@ -43,8 +43,14 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:    ":8080",
-		Handler: httpapi.NewHandler(httpapi.NewPostgresStore(db)),
+		Addr: ":8080",
+		Handler: httpapi.NewHandler(httpapi.NewPostgresStore(db), httpapi.HandlerOptions{
+			GoogleAuth: httpapi.GoogleAuthConfig{
+				ClientID:      strings.TrimSpace(os.Getenv("GOOGLE_OAUTH_CLIENT_ID")),
+				ClientSecret:  strings.TrimSpace(os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET")),
+				PublicBaseURL: strings.TrimSpace(os.Getenv("GOOGLE_OAUTH_PUBLIC_BASE_URL")),
+			},
+		}),
 	}
 	log.Printf("app api listening on %s", server.Addr)
 	log.Fatal(server.ListenAndServe())

@@ -64,6 +64,8 @@ type SessionUser = {
 
 type SessionState = {
   authenticated: boolean;
+  googleLoginEnabled?: boolean;
+  googleLoginURL?: string;
   user?: SessionUser;
   accessibleWorkspaces?: WorkspaceAccess[];
 };
@@ -81,9 +83,32 @@ const SHARE_ENDPOINT = "/api/shares";
 
 const UNAUTHENTICATED_SESSION: SessionState = {
   authenticated: false,
+  googleLoginEnabled: false,
+  googleLoginURL: "",
   accessibleWorkspaces: [],
 };
 const EMPTY_WORKSPACES: WorkspaceAccess[] = [];
+
+function authErrorMessage(code: string) {
+  switch (code) {
+    case "google_login_unavailable":
+      return "Google login is not configured for this deployment.";
+    case "google_login_cancelled":
+      return "Google login was cancelled before it completed.";
+    case "google_login_expired":
+      return "Google login expired. Start the sign-in flow again.";
+    case "google_email_not_verified":
+      return "Google login requires a verified email address.";
+    case "google_email_not_supported":
+      return "Google login is limited to existing users with a Gmail address.";
+    case "google_account_not_allowed":
+      return "That Google account does not match an existing user in this app.";
+    case "google_login_failed":
+      return "Google login failed. Try again.";
+    default:
+      return "Unable to complete Google login.";
+  }
+}
 
 async function readErrorMessage(response: Response, fallback: string) {
   try {
@@ -129,6 +154,8 @@ export function App() {
 
   const currentUser = session?.user;
   const isAuthenticated = session?.authenticated === true;
+  const googleLoginEnabled = session?.googleLoginEnabled === true;
+  const googleLoginURL = session?.googleLoginURL ?? "";
   const requiresPasswordReset = currentUser?.passwordResetRequired === true;
   const accessibleWorkspaces = session?.accessibleWorkspaces ?? EMPTY_WORKSPACES;
   const currentWorkspace = accessibleWorkspaces.find(
@@ -141,6 +168,20 @@ export function App() {
         .filter((email, index, emails) => emails.indexOf(email) === index),
     [shares],
   );
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("authError");
+    if (!authError) {
+      return;
+    }
+
+    setLoginError(authErrorMessage(authError));
+    params.delete("authError");
+    const nextQuery = params.toString();
+    const nextURL = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", nextURL);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -159,6 +200,8 @@ export function App() {
         if (isMounted) {
           setSession({
             authenticated: data.authenticated,
+            googleLoginEnabled: data.googleLoginEnabled === true,
+            googleLoginURL: data.googleLoginURL ?? "",
             user: data.user,
             accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
               ? data.accessibleWorkspaces
@@ -308,6 +351,8 @@ export function App() {
       const data = (await response.json()) as SessionState;
       setSession({
         authenticated: data.authenticated,
+        googleLoginEnabled: data.googleLoginEnabled === true,
+        googleLoginURL: data.googleLoginURL ?? "",
         user: data.user,
         accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
           ? data.accessibleWorkspaces
@@ -352,6 +397,8 @@ export function App() {
       const data = (await response.json()) as SessionState;
       setSession({
         authenticated: data.authenticated,
+        googleLoginEnabled: data.googleLoginEnabled === true,
+        googleLoginURL: data.googleLoginURL ?? "",
         user: data.user,
         accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
           ? data.accessibleWorkspaces
@@ -575,6 +622,30 @@ export function App() {
           </Typography>
           <Typography variant="h4">Workspace login</Typography>
         </Stack>
+        {googleLoginEnabled && googleLoginURL ? (
+          <Stack spacing={1.5}>
+            <Button
+              component="a"
+              href={googleLoginURL}
+              variant="outlined"
+              color="inherit"
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Continue with Google
+            </Button>
+            <Typography color="text.secondary" variant="body2">
+              Google login succeeds only when the verified Google account is a Gmail address
+              that exactly matches an existing user in this app.
+            </Typography>
+            <Typography
+              variant="overline"
+              color="text.secondary"
+              sx={{ letterSpacing: "0.22em" }}
+            >
+              or use the provisioned password
+            </Typography>
+          </Stack>
+        ) : null}
         <Box component="form" onSubmit={handleLogin}>
           <Stack spacing={2}>
             <TextField

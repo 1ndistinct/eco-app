@@ -80,6 +80,26 @@ func (s *memoryStore) AuthenticateUser(_ context.Context, email string, password
 	}, nil
 }
 
+func (s *memoryStore) AuthenticateGoogleUser(_ context.Context, email string) (SessionUser, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	user, exists := s.users[normalizeEmail(email)]
+	if !exists {
+		return SessionUser{}, ErrUserNotFound
+	}
+
+	if user.passwordResetRequired {
+		user.passwordResetRequired = false
+		s.users[user.email] = user
+	}
+
+	return SessionUser{
+		Email:                 user.email,
+		PasswordResetRequired: user.passwordResetRequired,
+	}, nil
+}
+
 func (s *memoryStore) ResetPassword(_ context.Context, email string, currentPassword string, newPassword string) (SessionUser, error) {
 	if err := validatePassword(newPassword); err != nil {
 		return SessionUser{}, err

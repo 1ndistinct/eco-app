@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -235,5 +236,226 @@ func TestLoginResponseSerializesWorkspaces(t *testing.T) {
 	}
 	if len(state.AccessibleWorkspaces) != 1 || state.AccessibleWorkspaces[0].OwnerEmail != "owner@example.com" {
 		t.Fatalf("unexpected workspaces: %+v", state.AccessibleWorkspaces)
+	}
+}
+
+func TestSessionAdvertisesGoogleLoginWhenConfigured(t *testing.T) {
+	handler := NewHandler(newMemoryStore(), HandlerOptions{
+		GoogleAuth: GoogleAuthConfig{
+			ClientID:      "google-client-id",
+			ClientSecret:  "google-client-secret",
+			PublicBaseURL: "https://eco.treehousehl.com",
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "https://eco.treehousehl.com/api/auth/session", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected session status: %d", rec.Code)
+	}
+
+	var state SessionState
+	if err := json.Unmarshal(rec.Body.Bytes(), &state); err != nil {
+		t.Fatalf("decode session state: %v", err)
+	}
+
+	if state.Authenticated {
+		t.Fatalf("expected unauthenticated state")
+	}
+	if !state.GoogleLoginEnabled {
+		t.Fatalf("expected google login to be enabled")
+	}
+	if state.GoogleLoginURL != "https://eco.treehousehl.com/api/auth/google/start" {
+		t.Fatalf("unexpected google login url: %q", state.GoogleLoginURL)
+	}
+}
+
+func TestGoogleLoginCallbackCreatesSessionForExistingVerifiedUser(t *testing.T) {
+	store := newMemoryStore()
+	if _, err := store.addUser("owner@gmail.com", "temporary-password-123", true); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	oauthServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"google-access-token","token_type":"Bearer","expires_in":3600}`))
+		case "/userinfo":
+			if got := r.Header.Get("Authorization"); got != "Bearer google-access-token" {
+				t.Fatalf("unexpected authorization header: %q", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"email":"owner@gmail.com","email_verified":true}`))
+		default:
+			t.Fatalf("unexpected oauth test path: %s", r.URL.Path)
+		}
+	}))
+	defer oauthServer.Close()
+
+	handler := NewHandler(store, HandlerOptions{
+		GoogleAuth: GoogleAuthConfig{
+			ClientID:         "google-client-id",
+			ClientSecret:     "google-client-secret",
+			PublicBaseURL:    "https://eco.treehousehl.com",
+			AuthURL:          oauthServer.URL + "/auth",
+			TokenURL:         oauthServer.URL + "/token",
+			UserInfoEndpoint: oauthServer.URL + "/userinfo",
+		},
+	})
+
+	callbackReq := httptest.NewRequest(
+		http.MethodGet,
+		"https://eco.treehousehl.com/api/auth/google/callback?state=google-state&code=google-code",
+		nil,
+	)
+	callbackReq.AddCookie(newGoogleStateCookie("google-state", true))
+	callbackRec := httptest.NewRecorder()
+	handler.ServeHTTP(callbackRec, callbackReq)
+
+	if callbackRec.Code != http.StatusSeeOther {
+		t.Fatalf("unexpected callback status: %d body=%s", callbackRec.Code, callbackRec.Body.String())
+	}
+	location, err := callbackRec.Result().Location()
+	if err != nil {
+		t.Fatalf("callback redirect location: %v", err)
+	}
+	if location.String() != "https://eco.treehousehl.com/" {
+		t.Fatalf("unexpected callback redirect: %s", location)
+	}
+
+	sessionCookie := requireSessionCookie(t, callbackRec)
+	sessionReq := httptest.NewRequest(http.MethodGet, "https://eco.treehousehl.com/api/auth/session", nil)
+	sessionReq.AddCookie(sessionCookie)
+	sessionRec := httptest.NewRecorder()
+	handler.ServeHTTP(sessionRec, sessionReq)
+
+	if sessionRec.Code != http.StatusOK {
+		t.Fatalf("unexpected session status after google login: %d body=%s", sessionRec.Code, sessionRec.Body.String())
+	}
+
+	var state SessionState
+	if err := json.Unmarshal(sessionRec.Body.Bytes(), &state); err != nil {
+		t.Fatalf("decode session state: %v", err)
+	}
+	if !state.Authenticated {
+		t.Fatalf("expected authenticated session")
+	}
+	if state.User == nil || state.User.Email != "owner@gmail.com" {
+		t.Fatalf("unexpected session user: %+v", state.User)
+	}
+	if state.User.PasswordResetRequired {
+		t.Fatalf("expected google login to clear password reset requirement")
+	}
+}
+
+func TestGoogleLoginCallbackRejectsUnknownUser(t *testing.T) {
+	oauthServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"google-access-token","token_type":"Bearer","expires_in":3600}`))
+		case "/userinfo":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"email":"missing@gmail.com","email_verified":true}`))
+		default:
+			t.Fatalf("unexpected oauth test path: %s", r.URL.Path)
+		}
+	}))
+	defer oauthServer.Close()
+
+	handler := NewHandler(newMemoryStore(), HandlerOptions{
+		GoogleAuth: GoogleAuthConfig{
+			ClientID:         "google-client-id",
+			ClientSecret:     "google-client-secret",
+			PublicBaseURL:    "https://eco.treehousehl.com",
+			AuthURL:          oauthServer.URL + "/auth",
+			TokenURL:         oauthServer.URL + "/token",
+			UserInfoEndpoint: oauthServer.URL + "/userinfo",
+		},
+	})
+
+	callbackReq := httptest.NewRequest(
+		http.MethodGet,
+		"https://eco.treehousehl.com/api/auth/google/callback?state=google-state&code=google-code",
+		nil,
+	)
+	callbackReq.AddCookie(newGoogleStateCookie("google-state", true))
+	callbackRec := httptest.NewRecorder()
+	handler.ServeHTTP(callbackRec, callbackReq)
+
+	if callbackRec.Code != http.StatusSeeOther {
+		t.Fatalf("unexpected callback status: %d body=%s", callbackRec.Code, callbackRec.Body.String())
+	}
+	location, err := callbackRec.Result().Location()
+	if err != nil {
+		t.Fatalf("callback redirect location: %v", err)
+	}
+
+	parsedQuery, err := url.ParseQuery(location.RawQuery)
+	if err != nil {
+		t.Fatalf("parse callback redirect query: %v", err)
+	}
+	if parsedQuery.Get("authError") != "google_account_not_allowed" {
+		t.Fatalf("unexpected authError redirect: %q", parsedQuery.Get("authError"))
+	}
+}
+
+func TestGoogleLoginCallbackRejectsNonGmailAccount(t *testing.T) {
+	store := newMemoryStore()
+	if _, err := store.addUser("owner@example.com", "temporary-password-123", false); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	oauthServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"google-access-token","token_type":"Bearer","expires_in":3600}`))
+		case "/userinfo":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"email":"owner@example.com","email_verified":true}`))
+		default:
+			t.Fatalf("unexpected oauth test path: %s", r.URL.Path)
+		}
+	}))
+	defer oauthServer.Close()
+
+	handler := NewHandler(store, HandlerOptions{
+		GoogleAuth: GoogleAuthConfig{
+			ClientID:         "google-client-id",
+			ClientSecret:     "google-client-secret",
+			PublicBaseURL:    "https://eco.treehousehl.com",
+			AuthURL:          oauthServer.URL + "/auth",
+			TokenURL:         oauthServer.URL + "/token",
+			UserInfoEndpoint: oauthServer.URL + "/userinfo",
+		},
+	})
+
+	callbackReq := httptest.NewRequest(
+		http.MethodGet,
+		"https://eco.treehousehl.com/api/auth/google/callback?state=google-state&code=google-code",
+		nil,
+	)
+	callbackReq.AddCookie(newGoogleStateCookie("google-state", true))
+	callbackRec := httptest.NewRecorder()
+	handler.ServeHTTP(callbackRec, callbackReq)
+
+	if callbackRec.Code != http.StatusSeeOther {
+		t.Fatalf("unexpected callback status: %d body=%s", callbackRec.Code, callbackRec.Body.String())
+	}
+	location, err := callbackRec.Result().Location()
+	if err != nil {
+		t.Fatalf("callback redirect location: %v", err)
+	}
+
+	parsedQuery, err := url.ParseQuery(location.RawQuery)
+	if err != nil {
+		t.Fatalf("parse callback redirect query: %v", err)
+	}
+	if parsedQuery.Get("authError") != "google_email_not_supported" {
+		t.Fatalf("unexpected authError redirect: %q", parsedQuery.Get("authError"))
 	}
 }
