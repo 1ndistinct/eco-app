@@ -1,0 +1,29 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="leafFill" x1="76" y1="44" x2="186" y2="208" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7FB693"/>
+      <stop offset="0.52" stop-color="#4E8B6C"/>
+      <stop offset="1" stop-color="#234E3D"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="rotate(-12 128 128)">
+    <path
+      d="M132 26C167 31 195 57 207 92C216 118 216 148 203 175C188 207 162 229 128 238C94 229 68 207 53 175C40 148 40 118 49 92C61 57 89 31 124 26C127 25 129 25 132 26Z"
+      fill="url(#leafFill)"
+    />
+    <path
+      d="M128 57C138 96 138 140 127 199"
+      stroke="#F3E7D5"
+      stroke-width="9"
+      stroke-linecap="round"
+    />
+    <path
+      d="M132 116C153 108 169 95 183 77"
+      stroke="#F3E7D5"
+      stroke-opacity="0.86"
+      stroke-width="6"
+      stroke-linecap="round"
+    />
+  </g>
+</svg>
