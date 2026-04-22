@@ -36,6 +36,7 @@ In the Helm chart, these come from:
 - `googleOAuth.clientID`
 - `googleOAuth.clientSecret`
 - `googleOAuth.publicBaseURL`
+Keep local-only OAuth values in a separate Helm values file such as `deploy/k3d/tm.secrets.yaml`, based on `deploy/k3d/tm.secrets.example.yaml`.
 Google login only succeeds when the verified Google account is a Gmail address and exactly matches an already-provisioned user email.
 Default external routing uses one Traefik host with path-based endpoints:
 - local frontend: http://eco.localhost/
@@ -45,8 +46,11 @@ Use `K3D_VALUES_FILE=./deploy/k3d/tm.values.yaml` on `tm` to deploy with:
 - frontend: http://192.168.1.84/
 - backend: http://192.168.1.84/api/healthz
 - alias: http://eco.treehousehl.com/
+Set `K3D_SECRETS_FILE=./deploy/k3d/tm.secrets.yaml` when you want `task helm:template`, `task deploy`, or `task deploy:docker` to layer those local-only values into the Helm release.
 For Google OAuth on `tm`, use `https://eco.treehousehl.com` as `GOOGLE_OAUTH_PUBLIC_BASE_URL`.
 Register `https://eco.treehousehl.com/api/auth/google/callback` as the Google OAuth redirect URI for that deployment.
+The standard `tm` Docker deploy path with Google OAuth is:
+- `K3D_VALUES_FILE=./deploy/k3d/tm.values.yaml K3D_SECRETS_FILE=./deploy/k3d/tm.secrets.yaml task deploy:docker`
 Set `INGRESS_HOST=<host>` when you want to force a single ingress host for a one-off run.
 Use task probe:app:external and task probe:web:external to verify the ingress path from the host.
 The default repo validation paths now run the browser flow as well:
