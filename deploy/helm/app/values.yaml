@@ -22,12 +22,8 @@ nats:
   port: 4222
 
 ingress:
-  className: traefik
-  annotations: {}
-  tls: []
-  app:
-    enabled: true
-    host: ""
-  web:
-    enabled: true
-    host: ""
+  enabled: true
+  host: ""
+  entryPoints:
+    - web
+  apiPathPrefix: /api

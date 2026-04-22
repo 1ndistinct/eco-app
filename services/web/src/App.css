@@ -1,0 +1,217 @@
+.app-shell {
+  position: relative;
+  overflow: hidden;
+}
+
+.app-shell::before {
+  content: "";
+  position: absolute;
+  inset: -8rem auto auto -12rem;
+  width: 24rem;
+  height: 24rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(240, 93, 63, 0.12), transparent 70%);
+  filter: blur(16px);
+  pointer-events: none;
+}
+
+.app-shell::after {
+  content: "";
+  position: absolute;
+  inset: auto -8rem 10rem auto;
+  width: 20rem;
+  height: 20rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(22, 66, 60, 0.1), transparent 70%);
+  filter: blur(18px);
+  pointer-events: none;
+}
+
+.hero-grid {
+  display: grid;
+  gap: 1.75rem;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.82fr);
+  align-items: start;
+}
+
+.hero-panel {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, rgba(255, 251, 246, 0.95), rgba(255, 245, 236, 0.9)),
+    linear-gradient(120deg, rgba(22, 66, 60, 0.04), rgba(240, 93, 63, 0.06));
+  border: 1px solid rgba(20, 34, 29, 0.08);
+  box-shadow:
+    0 20px 46px rgba(33, 51, 45, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.hero-panel::before {
+  content: "";
+  position: absolute;
+  inset: -15% auto auto -6%;
+  width: 13rem;
+  height: 13rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(240, 93, 63, 0.14), transparent 72%);
+}
+
+.hero-panel::after {
+  content: "";
+  position: absolute;
+  inset: auto -2rem -3rem auto;
+  width: 12rem;
+  height: 12rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(22, 66, 60, 0.1), transparent 70%);
+}
+
+.spotlight-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 1.5rem;
+  border-radius: 32px;
+  background:
+    linear-gradient(180deg, rgba(20, 34, 29, 0.96), rgba(22, 66, 60, 0.92)),
+    linear-gradient(140deg, rgba(240, 93, 63, 0.16), transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f8f1e8;
+  box-shadow:
+    0 18px 40px rgba(19, 34, 30, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.spotlight-panel::before {
+  content: "";
+  position: absolute;
+  inset: 1.25rem 1.25rem auto auto;
+  width: 7rem;
+  height: 7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1), transparent 70%);
+}
+
+.metric-card {
+  height: 100%;
+  border: 1px solid rgba(20, 34, 29, 0.08);
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow:
+    0 10px 22px rgba(20, 34, 29, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+.soft-panel {
+  border: 1px solid rgba(20, 34, 29, 0.08);
+  background: rgba(255, 250, 244, 0.8);
+  box-shadow:
+    0 16px 34px rgba(20, 34, 29, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68);
+}
+
+.composer-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 250, 244, 0.96), rgba(255, 247, 239, 0.9)),
+    linear-gradient(135deg, rgba(240, 93, 63, 0.04), rgba(22, 66, 60, 0.04));
+}
+
+.todo-surface {
+  position: relative;
+  overflow: hidden;
+}
+
+.todo-surface::before {
+  content: "";
+  position: absolute;
+  inset: -25% auto auto 60%;
+  width: 14rem;
+  height: 14rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(240, 93, 63, 0.08), transparent 72%);
+}
+
+.surface-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.todo-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.todo-card {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.todo-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(20, 34, 29, 0.09);
+  border-color: rgba(20, 34, 29, 0.14);
+}
+
+.todo-index {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  background: rgba(20, 34, 29, 0.08);
+  color: #16423c;
+}
+
+.todo-index-done {
+  background: rgba(45, 127, 94, 0.14);
+  color: #2d7f5e;
+}
+
+.todo-title-done {
+  color: #55625c;
+  text-decoration: line-through;
+}
+
+.empty-state {
+  border: 1px dashed rgba(20, 34, 29, 0.18);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.section-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #4b5a53;
+}
+
+@media (max-width: 960px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell::before,
+  .app-shell::after {
+    display: none;
+  }
+
+  .spotlight-panel {
+    border-radius: 28px;
+  }
+}

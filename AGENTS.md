@@ -21,11 +21,20 @@ Build and maintain echo-agentic-todo-postfix-20260411210213 as a standard multi-
 ## Agent Model
 - Use coordinator-led specialist routing.
 - Backend defines shared contracts before frontend integrates against them.
+- Default public routing is one Traefik host with frontend at `/` and backend under `/api`.
+- Shipped validation should include the host probes and `task test:e2e` when that browser path exists.
 
 ## Tooling Expectations
+- task setup
 - task test
+- task test:e2e
 - task lint
 - task deploy
+- task deploy:docker
+- task docker:push
+- task helm:template
+- task tilt:up
+- task tilt:down
 - task probe:app
 - task probe:web
 - task cleanup

@@ -105,4 +105,46 @@ describe("App", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/network down/i);
   });
+
+  it("marks a todo as completed through the API", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [{ id: "1", title: "Ship frontend", completed: false }],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: "1", title: "Ship frontend", completed: true }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+
+    render(<App />);
+
+    await screen.findByText("Ship frontend");
+
+    fireEvent.click(screen.getByRole("button", { name: /mark ship frontend as done/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/todos/1");
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completed: true }),
+    });
+    expect(await screen.findByRole("button", { name: /mark ship frontend as open/i })).toBeInTheDocument();
+    expect(screen.getByText(/0 items remaining/i)).toBeInTheDocument();
+  });
 });

@@ -19,6 +19,10 @@ type createTodoRequest struct {
 	Title string `json:"title"`
 }
 
+type updateTodoRequest struct {
+	Completed *bool `json:"completed"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
@@ -59,16 +63,31 @@ func (s *todoStore) create(title string) Todo {
 	return todo
 }
 
+func (s *todoStore) updateCompleted(id string, completed bool) (Todo, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for index, todo := range s.todos {
+		if todo.ID != id {
+			continue
+		}
+
+		todo.Completed = completed
+		s.todos[index] = todo
+		return todo, true
+	}
+
+	return Todo{}, false
+}
+
 func Handler() http.Handler {
 	return NewHandler(newTodoStore())
 }
 
 func NewHandler(store *todoStore) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	mux.HandleFunc("/healthz", healthzHandler)
+	mux.HandleFunc("/api/healthz", healthzHandler)
 	mux.HandleFunc("/api/todos", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
@@ -90,7 +109,43 @@ func NewHandler(store *todoStore) http.Handler {
 			writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
 		}
 	})
+	mux.HandleFunc("/api/todos/", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimPrefix(r.URL.Path, "/api/todos/")
+		if id == "" || strings.Contains(id, "/") {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "todo not found"})
+			return
+		}
+
+		switch r.Method {
+		case http.MethodPatch:
+			var req updateTodoRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON body"})
+				return
+			}
+			if req.Completed == nil {
+				writeJSON(w, http.StatusBadRequest, errorResponse{Error: "completed is required"})
+				return
+			}
+
+			todo, ok := store.updateCompleted(id, *req.Completed)
+			if !ok {
+				writeJSON(w, http.StatusNotFound, errorResponse{Error: "todo not found"})
+				return
+			}
+
+			writeJSON(w, http.StatusOK, todo)
+		default:
+			w.Header().Set("Allow", "PATCH")
+			writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+		}
+	})
 	return mux
+}
+
+func healthzHandler(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

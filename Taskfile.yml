@@ -1,6 +1,15 @@
 version: "3"
 
 tasks:
+  setup:
+    desc: Verify local tooling needed for the repo workflows
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        for tool in go pnpm docker kubectl helm tilt; do \
+          command -v "$tool" >/dev/null 2>&1 || { echo "missing required tool: $tool" >&2; exit 1; }; \
+        done'
+
   install:
     desc: Install frontend dependencies
     cmds:
@@ -27,6 +36,12 @@ tasks:
     cmds:
       - task test:backend
       - task test:frontend
+
+  test:e2e:
+    desc: Run browser end-to-end tests against the deployed app
+    cmds:
+      - task install
+      - sh -c 'PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-http://app.localhost}" pnpm --dir services/web test:e2e'
 
   lint:backend:
     desc: Run backend formatting checks
@@ -65,8 +80,54 @@ tasks:
       - task build:backend
       - task build:frontend
 
+  docker:build:app:
+    desc: Build the backend image with Docker
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-app:${IMAGE_TAG:-dev}"; \
+        docker build -f services/app/Dockerfile -t "$ref" .'
+
+  docker:build:web:
+    desc: Build the frontend image with Docker
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-web:${IMAGE_TAG:-dev}"; \
+        docker build -f services/web/Dockerfile -t "$ref" .'
+
+  docker:build:
+    desc: Build the backend and frontend images with Docker
+    cmds:
+      - task docker:build:app
+      - task docker:build:web
+
+  docker:push:app:
+    desc: Build and push the backend image with Docker
+    cmds:
+      - task docker:build:app
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-app:${IMAGE_TAG:-dev}"; \
+        docker push "$ref"'
+
+  docker:push:web:
+    desc: Build and push the frontend image with Docker
+    cmds:
+      - task docker:build:web
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-web:${IMAGE_TAG:-dev}"; \
+        docker push "$ref"'
+
+  docker:push:
+    desc: Build and push the backend and frontend images with Docker
+    cmds:
+      - task docker:push:app
+      - task docker:push:web
+
   image:app:
-    desc: Build and push the backend image to the local registry
+    desc: Build and push the backend image with BuildKit
     cmds:
       - |
         sh -c 'set -eu; \
@@ -79,7 +140,7 @@ tasks:
           --output type=image,name="$ref",push=true,registry.insecure=true'
 
   image:web:
-    desc: Build and push the frontend image to the local registry
+    desc: Build and push the frontend image with BuildKit
     cmds:
       - |
         sh -c 'set -eu; \
@@ -91,8 +152,24 @@ tasks:
           --opt filename=services/web/Dockerfile \
           --output type=image,name="$ref",push=true,registry.insecure=true'
 
+  helm:template:
+    desc: Render the Helm chart with the current image settings
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ns="${APP_NAMESPACE:-app-system}"; \
+        release="${APP_RELEASE_NAME:-app}"; \
+        registry="${CLUSTER_REGISTRY:-k3d-echo-registry.localhost:5000}"; \
+        tag="${IMAGE_TAG:-dev}"; \
+        helm template "$release" ./deploy/helm/app -f ./deploy/k3d/local.values.yaml \
+          --namespace "$ns" \
+          --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
+          --set-string images.app.tag="$tag" \
+          --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
+          --set-string images.web.tag="$tag"'
+
   deploy:
-    desc: Build images, deploy the chart, and refresh the app namespace
+    desc: Build images with BuildKit, deploy the chart, and refresh the app namespace
     cmds:
       - task image:app
       - task image:web
@@ -109,6 +186,31 @@ tasks:
           --set-string images.app.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
           --set-string images.web.tag="$tag"; \
+        kubectl rollout restart deployment/"$release-app" -n "$ns"; \
+        kubectl rollout restart deployment/"$release-web" -n "$ns"; \
+        kubectl rollout status deployment/"$release-app" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
+        kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
+
+  deploy:docker:
+    desc: Build images with Docker, deploy the chart, and refresh the app namespace
+    cmds:
+      - task docker:push:app
+      - task docker:push:web
+      - |
+        sh -c 'set -eu; \
+        ns="${APP_NAMESPACE:-app-system}"; \
+        release="${APP_RELEASE_NAME:-app}"; \
+        registry="${CLUSTER_REGISTRY:-k3d-echo-registry.localhost:5000}"; \
+        tag="${IMAGE_TAG:-dev}"; \
+        helm upgrade --install "$release" ./deploy/helm/app -f ./deploy/k3d/local.values.yaml \
+          --namespace "$ns" \
+          --wait --timeout "${DEPLOY_TIMEOUT:-5m}" \
+          --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
+          --set-string images.app.tag="$tag" \
+          --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
+          --set-string images.web.tag="$tag"; \
+        kubectl rollout restart deployment/"$release-app" -n "$ns"; \
+        kubectl rollout restart deployment/"$release-web" -n "$ns"; \
         kubectl rollout status deployment/"$release-app" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
 
@@ -116,6 +218,11 @@ tasks:
     desc: Alias for deploy
     cmds:
       - task deploy
+
+  up:docker:
+    desc: Alias for the Docker-based deploy path
+    cmds:
+      - task deploy:docker
 
   cleanup:
     desc: Tear down the deployed release from the app namespace
@@ -149,7 +256,7 @@ tasks:
       - |
         sh -c 'set -eu; \
         release="${APP_RELEASE_NAME:-app}"; \
-        printf "frontend: http://%s.localhost\nbackend: http://api.%s.localhost/healthz\n" "$release" "$release"'
+        printf "frontend: http://%s.localhost/\nbackend: http://%s.localhost/api/healthz\n" "$release" "$release"'
 
   logs:
     desc: "Stream deployment logs (for example: task logs -- web)"
@@ -168,7 +275,7 @@ tasks:
         sh -c 'set -eu; \
         ns="${APP_NAMESPACE:-app-system}"; \
         release="${APP_RELEASE_NAME:-app}"; \
-        curl -fsS "http://$release-app.$ns.svc.cluster.local:8080/healthz"'
+        kubectl exec -n "$ns" deployment/"$release-app" -- wget -qO- "http://127.0.0.1:8080/healthz"'
 
   probe:web:
     desc: Probe the frontend root in-cluster
@@ -177,7 +284,7 @@ tasks:
         sh -c 'set -eu; \
         ns="${APP_NAMESPACE:-app-system}"; \
         release="${APP_RELEASE_NAME:-app}"; \
-        curl -fsS "http://$release-web.$ns.svc.cluster.local/" >/dev/null'
+        kubectl exec -n "$ns" deployment/"$release-web" -- wget -qO- "http://127.0.0.1/" >/dev/null'
 
   probe:app:external:
     desc: Probe the backend health endpoint through ingress from the host
@@ -185,7 +292,7 @@ tasks:
       - |
         sh -c 'set -eu; \
         release="${APP_RELEASE_NAME:-app}"; \
-        curl -fsS "http://api.${release}.localhost/healthz"'
+        curl --retry "${PROBE_RETRIES:-20}" --retry-delay 1 --retry-all-errors -fsS "http://${release}.localhost/api/healthz"'
 
   probe:web:external:
     desc: Probe the frontend root through ingress from the host
@@ -193,19 +300,38 @@ tasks:
       - |
         sh -c 'set -eu; \
         release="${APP_RELEASE_NAME:-app}"; \
-        curl -fsS "http://${release}.localhost/" >/dev/null'
+        curl --retry "${PROBE_RETRIES:-20}" --retry-delay 1 --retry-all-errors -fsS "http://${release}.localhost/" >/dev/null'
+
+  tilt:up:
+    desc: Start the local Tilt session using the Docker deploy path
+    cmds:
+      - tilt up
+
+  tilt:down:
+    desc: Stop the local Tilt session and clean up the release
+    cmds:
+      - |
+        sh -c 'tilt down >/dev/null 2>&1 || true; \
+        task cleanup'
 
   ci:
-    desc: Run whole-repo validation, deploy/probe cycle, and cleanup
+    desc: Run whole-repo validation, deploy/probe cycle including ingress, and cleanup
     cmds:
       - task test
       - |
         sh -c 'set -eu; \
         cleanup() { task cleanup; }; \
         trap cleanup EXIT; \
-        task deploy; \
+        deploy_target="deploy"; \
+        if ! command -v buildctl-daemonless.sh >/dev/null 2>&1; then \
+          deploy_target="deploy:docker"; \
+        fi; \
+        task "$deploy_target"; \
         task probe:app; \
-        task probe:web'
+        task probe:web; \
+        task probe:app:external; \
+        task probe:web:external; \
+        task test:e2e'
 
   branch:
     desc: Print the default base branch
