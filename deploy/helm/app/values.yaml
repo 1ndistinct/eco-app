@@ -21,13 +21,15 @@ postgres:
 nats:
   port: 4222
 
+googleOAuth:
+  clientID: ""
+  clientSecret: ""
+  publicBaseURL: ""
+
 ingress:
-  className: traefik
-  annotations: {}
-  tls: []
-  app:
-    enabled: true
-    host: ""
-  web:
-    enabled: true
-    host: ""
+  enabled: true
+  host: ""
+  hosts: []
+  entryPoints:
+    - web
+  apiPathPrefix: /api
