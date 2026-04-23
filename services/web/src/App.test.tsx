@@ -378,6 +378,10 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /add collaborator/i }));
     expect(await screen.findByText(/shared with collab@example.com/i)).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/collaborator email/i)).not.toBeInTheDocument();
+    });
 
     const existingTodo = screen.getByText("Existing task").closest("li");
     if (!existingTodo) {

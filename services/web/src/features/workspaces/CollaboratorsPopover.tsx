@@ -64,13 +64,15 @@ export function CollaboratorsPopover({
       onClose={onClose}
       anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       transformOrigin={{ vertical: "top", horizontal: "right" }}
-      PaperProps={{
-        sx: {
-          mt: 1,
-          width: { xs: "calc(100vw - 2rem)", sm: 380 },
-          maxWidth: "calc(100vw - 2rem)",
-          p: 2,
-          borderRadius: "20px",
+      slotProps={{
+        paper: {
+          sx: {
+            mt: 1,
+            width: { xs: "calc(100vw - 2rem)", sm: 380 },
+            maxWidth: "calc(100vw - 2rem)",
+            p: 2,
+            borderRadius: "20px",
+          },
         },
       }}
     >
