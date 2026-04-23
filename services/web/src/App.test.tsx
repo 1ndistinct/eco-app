@@ -812,7 +812,7 @@ describe("App", () => {
       todosButton.compareDocumentPosition(settingsButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: /open todos app/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /open app drawer/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open workspace menu/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Default workspace")).not.toBeInTheDocument();
 
     fireEvent.click(selectorButton);
@@ -823,7 +823,7 @@ describe("App", () => {
     expect(screen.getByRole("combobox")).toHaveTextContent("Personal · owner@example.com");
   });
 
-  it("shows a full-screen mobile drawer for app selection", async () => {
+  it("shows a mobile workspace menu with workspace and app navigation", async () => {
     setMatchMedia(true);
 
     fetchMock
@@ -838,15 +838,19 @@ describe("App", () => {
 
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /open app drawer/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /open workspace menu/i }));
 
-    expect(await screen.findByRole("heading", { name: /choose a section/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /workspace menu/i })).toBeInTheDocument();
     expect(document.body.querySelector(".workspace-mobile-drawer")).not.toBeNull();
+    expect(screen.getByText("Workspaces")).toBeInTheDocument();
+    expect(screen.getAllByText("Personal").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /create workspace/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open settings/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^todos$/i }));
 
     await waitFor(() => {
-      expect(screen.queryByRole("heading", { name: /choose a section/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: /workspace menu/i })).not.toBeInTheDocument();
     });
   });
 });

@@ -351,6 +351,7 @@ export default function App() {
   function handleWorkspaceChange(workspaceId: string) {
     setSelectedWorkspaceId(workspaceId);
     updateWorkspaceLocation(workspaceId, "push");
+    setIsMobileAppDrawerOpen(false);
     setIsWorkspaceSettingsOpen(false);
     setWorkspaceError(null);
     setShareEmail("");
@@ -901,6 +902,7 @@ export default function App() {
             onShareWorkspace={handleShareWorkspace}
             onRemoveCollaborator={handleRemoveCollaborator}
             onToggleSidebar={() => setIsMobileAppDrawerOpen((current) => !current)}
+            onCloseSidebar={() => setIsMobileAppDrawerOpen(false)}
             onToggleSettings={() => setIsWorkspaceSettingsOpen((current) => !current)}
             onLogout={handleLogout}
           />
@@ -916,8 +918,6 @@ export default function App() {
                 <WorkspaceView
                   currentWorkspace={currentWorkspace}
                   currentUserEmail={sessionState.user?.email}
-                  isSidebarExpanded={isMobileAppDrawerOpen}
-                  onCloseSidebar={() => setIsMobileAppDrawerOpen(false)}
                   todos={todos}
                   remainingCount={remainingCount}
                   completedCount={completedCount}
