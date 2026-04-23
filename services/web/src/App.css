@@ -5,6 +5,11 @@
     linear-gradient(180deg, #fbf7f2 0%, #f6f1ea 100%);
 }
 
+.app-shell-auth {
+  height: 100dvh;
+  overflow: hidden;
+}
+
 .hero-panel,
 .soft-panel,
 .page-header {
@@ -21,14 +26,121 @@
 
 .page-header {
   backdrop-filter: blur(12px);
+  width: 100%;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+.workspace-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-header-shell {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  flex-shrink: 0;
+}
+
+.workspace-body-shell {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workspace-body-container {
+  height: 100%;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.workspace-body-stack {
+  height: 100%;
+  min-height: 0;
+}
+
+.workspace-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.workspace-screen-scroll {
+  overflow: auto;
 }
 
 .workspace-select {
   min-width: min(100%, 24rem);
 }
 
+.header-collaborators {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3rem;
+  min-height: 3rem;
+  padding: 0.25rem;
+}
+
 .workspace-panel {
   background: rgba(255, 255, 255, 0.88);
+}
+
+.workspace-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  width: 100%;
+  overflow: hidden;
+}
+
+.workspace-sidebar {
+  width: 4.75rem;
+  min-width: 4.75rem;
+  overflow: auto;
+  transition:
+    width 160ms ease,
+    min-width 160ms ease;
+}
+
+.workspace-sidebar.is-expanded {
+  width: 15rem;
+  min-width: 15rem;
+}
+
+.workspace-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.app-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.app-selector-icon {
+  border: 1px solid rgba(20, 34, 29, 0.08);
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.app-selector-icon-active {
+  background: rgba(22, 66, 60, 0.12);
+}
+
+.workspace-main {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.25rem;
 }
 
 .subapp-shell {
@@ -106,8 +218,50 @@
   color: #52615a;
 }
 
+.note-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.note-row {
+  padding: 1rem 1.125rem;
+  border-radius: 16px;
+  border: 1px solid rgba(20, 34, 29, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.note-row-editor {
+  background: rgba(240, 93, 63, 0.04);
+}
+
 @media (max-width: 900px) {
   .workspace-select {
     min-width: 100%;
+  }
+
+  .workspace-body-container {
+    padding: 0.75rem;
+  }
+
+  .workspace-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-sidebar,
+  .workspace-sidebar.is-expanded {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .app-selector {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .workspace-main {
+    padding-right: 0;
   }
 }

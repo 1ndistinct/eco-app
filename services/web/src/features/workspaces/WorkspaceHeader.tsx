@@ -1,7 +1,9 @@
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import {
+  Badge,
   Box,
   Button,
   FormControl,
@@ -12,6 +14,7 @@ import {
   Select,
   SelectChangeEvent,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
 
@@ -23,6 +26,7 @@ type WorkspaceHeaderProps = {
   accessibleWorkspaces: WorkspaceAccess[];
   selectedWorkspace: string;
   currentWorkspace?: WorkspaceAccess;
+  collaboratorCount: number;
   viewMode: "workspace" | "settings";
   onWorkspaceChange: (workspaceID: string) => void;
   onOpenCreateWorkspace: () => void;
@@ -35,6 +39,7 @@ export function WorkspaceHeader({
   accessibleWorkspaces,
   selectedWorkspace,
   currentWorkspace,
+  collaboratorCount,
   viewMode,
   onWorkspaceChange,
   onOpenCreateWorkspace,
@@ -47,9 +52,10 @@ export function WorkspaceHeader({
 
   return (
     <Paper
+      square
       elevation={0}
       className="page-header"
-      sx={{ p: { xs: 2, md: 2.5 }, borderRadius: { xs: "18px", md: "22px" } }}
+      sx={{ px: { xs: 1.5, md: 3 }, py: { xs: 1.5, md: 2 }, borderRadius: 0 }}
     >
       <Stack
         direction={{ xs: "column", lg: "row" }}
@@ -66,6 +72,19 @@ export function WorkspaceHeader({
           spacing={1}
           sx={{ alignItems: { sm: "center" }, width: { xs: "100%", lg: "auto" } }}
         >
+          <Tooltip
+            title={`${collaboratorCount} collaborator${collaboratorCount === 1 ? "" : "s"}`}
+          >
+            <Box
+              className="header-collaborators"
+              aria-label={`${collaboratorCount} collaborator${collaboratorCount === 1 ? "" : "s"}`}
+            >
+              <Badge badgeContent={collaboratorCount} color="secondary" showZero>
+                <GroupRoundedIcon />
+              </Badge>
+            </Box>
+          </Tooltip>
+
           <FormControl size="small" className="workspace-select">
             <InputLabel id="workspace-select-label">Workspace</InputLabel>
             <Select

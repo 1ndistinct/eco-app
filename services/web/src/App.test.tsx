@@ -428,6 +428,59 @@ describe("App", () => {
     });
   });
 
+  it("switches to the notes app from the collapsed sidebar and adds a local note", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(authenticatedSession()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [],
+            workspaceId: "workspace-1",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [],
+            workspaceId: "workspace-1",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: /workspaces/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /open notes app/i }));
+    expect(await screen.findByRole("button", { name: /add note/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /add note/i }));
+    fireEvent.change(screen.getByLabelText(/note title/i), {
+      target: { value: "Release notes" },
+    });
+    fireEvent.change(screen.getByLabelText(/^note$/i), {
+      target: { value: "Track deployment caveats here." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(await screen.findByText("Release notes")).toBeInTheDocument();
+    expect(screen.getByText("Track deployment caveats here.")).toBeInTheDocument();
+  });
+
   it("creates a workspace from the header and deletes it from settings", async () => {
     fetchMock
       .mockResolvedValueOnce(

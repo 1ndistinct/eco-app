@@ -19,7 +19,9 @@ import {
   Todo,
   TodoListResponse,
   UNAUTHENTICATED_SESSION,
+  WorkspaceApp,
   WorkspaceAccess,
+  WorkspaceNote,
   WorkspaceShare,
 } from "./app/types";
 import { AuthShell } from "./features/auth/AuthShell";
@@ -66,8 +68,11 @@ export default function App() {
   const [isSubmittingPasswordReset, setIsSubmittingPasswordReset] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [viewMode, setViewMode] = useState<"workspace" | "settings">("workspace");
+  const [activeWorkspaceApp, setActiveWorkspaceApp] = useState<WorkspaceApp>("todos");
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [shares, setShares] = useState<WorkspaceShare[]>([]);
+  const [notesByWorkspaceId, setNotesByWorkspaceId] = useState<Record<string, WorkspaceNote[]>>({});
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [shareEmail, setShareEmail] = useState("");
@@ -80,6 +85,10 @@ export default function App() {
   const [isSubmittingTodo, setIsSubmittingTodo] = useState(false);
   const [updatingTodoIds, setUpdatingTodoIds] = useState<string[]>([]);
   const [deletingTodoIds, setDeletingTodoIds] = useState<string[]>([]);
+  const [draftNoteTitle, setDraftNoteTitle] = useState("");
+  const [draftNoteContent, setDraftNoteContent] = useState("");
+  const [isAddingNoteInline, setIsAddingNoteInline] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDescription, setWorkspaceDescription] = useState("");
   const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
@@ -102,6 +111,10 @@ export default function App() {
         .filter((email) => email !== currentWorkspace?.ownerEmail)
         .sort((left, right) => left.localeCompare(right)),
     [currentWorkspace?.ownerEmail, shares],
+  );
+  const currentWorkspaceNotes = useMemo(
+    () => (currentWorkspace ? notesByWorkspaceId[currentWorkspace.id] ?? [] : []),
+    [currentWorkspace, notesByWorkspaceId],
   );
 
   const remainingCount = useMemo(
@@ -139,6 +152,13 @@ export default function App() {
     setTodoError(clearedState.todoError);
     setIsAddingTodoInline(clearedState.isAddingTodoInline);
     setDraftTodoTitle(clearedState.draftTodoTitle);
+    setNotesByWorkspaceId({});
+    setActiveWorkspaceApp("todos");
+    setIsSidebarExpanded(false);
+    setDraftNoteTitle("");
+    setDraftNoteContent("");
+    setIsAddingNoteInline(false);
+    setNoteError(null);
     setWorkspaceSuccess(null);
     setWorkspaceManageError(null);
     setDeletingWorkspaceId(null);
@@ -263,6 +283,12 @@ export default function App() {
     setShareError(null);
     setShareSuccess(null);
     setTodoError(null);
+    setNoteError(null);
+    setDraftTodoTitle("");
+    setIsAddingTodoInline(false);
+    setDraftNoteTitle("");
+    setDraftNoteContent("");
+    setIsAddingNoteInline(false);
     setWorkspaceManageError(null);
   }
 
@@ -453,6 +479,11 @@ export default function App() {
       setWorkspaceSuccess(`Deleted ${deletedWorkspace.name}.`);
       setTodos([]);
       setShares([]);
+      setNotesByWorkspaceId((current) => {
+        const next = { ...current };
+        delete next[deletedWorkspace.id];
+        return next;
+      });
     } catch (error) {
       setWorkspaceManageError(
         error instanceof Error ? error.message : "Unable to delete workspace.",
@@ -598,6 +629,36 @@ export default function App() {
     }
   }
 
+  function handleSubmitNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!currentWorkspace) {
+      return;
+    }
+
+    const trimmedTitle = draftNoteTitle.trim();
+    const trimmedContent = draftNoteContent.trim();
+    if (trimmedTitle === "" && trimmedContent === "") {
+      setNoteError("Note title or content is required.");
+      return;
+    }
+
+    const note: WorkspaceNote = {
+      id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title: trimmedTitle || "Untitled note",
+      content: trimmedContent,
+      workspaceId: currentWorkspace.id,
+    };
+
+    setNotesByWorkspaceId((current) => ({
+      ...current,
+      [currentWorkspace.id]: [...(current[currentWorkspace.id] ?? []), note],
+    }));
+    setDraftNoteTitle("");
+    setDraftNoteContent("");
+    setIsAddingNoteInline(false);
+    setNoteError(null);
+  }
+
   if (isBootstrapping) {
     return (
       <Box component="main" className="app-shell" sx={{ py: { xs: 4, md: 6 } }}>
@@ -660,14 +721,15 @@ export default function App() {
   }
 
   return (
-    <Box component="main" className="app-shell" sx={{ py: { xs: 3, md: 4 } }}>
-      <Container maxWidth="lg">
-        <Stack spacing={2.5}>
+    <Box component="main" className="app-shell app-shell-auth">
+      <Box className="workspace-shell">
+        <Box className="workspace-header-shell">
           <WorkspaceHeader
             currentUserEmail={sessionState.user?.email}
             accessibleWorkspaces={accessibleWorkspaces}
             selectedWorkspace={selectedWorkspaceId}
             currentWorkspace={currentWorkspace}
+            collaboratorCount={collaboratorEmails.length}
             viewMode={viewMode}
             onWorkspaceChange={handleWorkspaceChange}
             onOpenCreateWorkspace={openCreateWorkspaceDialog}
@@ -676,60 +738,98 @@ export default function App() {
             }
             onLogout={handleLogout}
           />
+        </Box>
 
-          {workspaceManageError ? <Alert severity="error">{workspaceManageError}</Alert> : null}
-          {workspaceSuccess ? <Alert severity="success">{workspaceSuccess}</Alert> : null}
+        <Box className="workspace-body-shell">
+          <Box className="workspace-body-container">
+            <Stack spacing={2.5} className="workspace-body-stack">
+              {workspaceManageError ? <Alert severity="error">{workspaceManageError}</Alert> : null}
+              {workspaceSuccess ? <Alert severity="success">{workspaceSuccess}</Alert> : null}
 
-          {viewMode === "settings" ? (
-            <WorkspaceSettingsView
-              currentWorkspace={currentWorkspace}
-              canManageCurrentWorkspace={canManageCurrentWorkspace}
-              deletingWorkspaceId={deletingWorkspaceId}
-              onBack={() => setViewMode("workspace")}
-              onDeleteWorkspace={handleDeleteWorkspace}
-            />
-          ) : (
-            <WorkspaceView
-              currentWorkspace={currentWorkspace}
-              currentUserEmail={sessionState.user?.email}
-              collaboratorEmails={collaboratorEmails}
-              shareEmail={shareEmail}
-              isSubmittingShare={isSubmittingShare}
-              shareError={shareError}
-              shareSuccess={shareSuccess}
-              onShareEmailChange={setShareEmail}
-              onShareWorkspace={handleShareWorkspace}
-              todos={todos}
-              remainingCount={remainingCount}
-              completedCount={completedCount}
-              isWorkspaceLoading={isWorkspaceLoading}
-              workspaceError={workspaceError}
-              todoError={todoError}
-              isAddingTodoInline={isAddingTodoInline}
-              draftTodoTitle={draftTodoTitle}
-              isSubmittingTodo={isSubmittingTodo}
-              updatingTodoIds={updatingTodoIds}
-              deletingTodoIds={deletingTodoIds}
-              onStartInlineTodo={() => {
-                setIsAddingTodoInline(true);
-                setTodoError(null);
-              }}
-              onDraftTodoTitleChange={setDraftTodoTitle}
-              onSubmitTodo={handleSubmitTodo}
-              onCancelInlineTodo={() => {
-                if (isSubmittingTodo) {
-                  return;
-                }
-                setDraftTodoTitle("");
-                setTodoError(null);
-                setIsAddingTodoInline(false);
-              }}
-              onToggleTodo={handleToggleTodo}
-              onDeleteTodo={handleDeleteTodo}
-            />
-          )}
-        </Stack>
-      </Container>
+              <Box
+                className={`workspace-screen${viewMode === "settings" ? " workspace-screen-scroll" : ""}`}
+              >
+                {viewMode === "settings" ? (
+                  <WorkspaceSettingsView
+                    currentWorkspace={currentWorkspace}
+                    canManageCurrentWorkspace={canManageCurrentWorkspace}
+                    deletingWorkspaceId={deletingWorkspaceId}
+                    onBack={() => setViewMode("workspace")}
+                    onDeleteWorkspace={handleDeleteWorkspace}
+                  />
+                ) : (
+                  <WorkspaceView
+                    currentWorkspace={currentWorkspace}
+                    currentUserEmail={sessionState.user?.email}
+                    activeWorkspaceApp={activeWorkspaceApp}
+                    isSidebarExpanded={isSidebarExpanded}
+                    collaboratorEmails={collaboratorEmails}
+                    shareEmail={shareEmail}
+                    isSubmittingShare={isSubmittingShare}
+                    shareError={shareError}
+                    shareSuccess={shareSuccess}
+                    onShareEmailChange={setShareEmail}
+                    onShareWorkspace={handleShareWorkspace}
+                    onWorkspaceAppChange={(app) => {
+                      setActiveWorkspaceApp(app);
+                      setTodoError(null);
+                      setNoteError(null);
+                    }}
+                    onToggleSidebar={() => setIsSidebarExpanded((current) => !current)}
+                    todos={todos}
+                    remainingCount={remainingCount}
+                    completedCount={completedCount}
+                    isWorkspaceLoading={isWorkspaceLoading}
+                    workspaceError={workspaceError}
+                    todoError={todoError}
+                    isAddingTodoInline={isAddingTodoInline}
+                    draftTodoTitle={draftTodoTitle}
+                    isSubmittingTodo={isSubmittingTodo}
+                    updatingTodoIds={updatingTodoIds}
+                    deletingTodoIds={deletingTodoIds}
+                    onStartInlineTodo={() => {
+                      setActiveWorkspaceApp("todos");
+                      setIsAddingTodoInline(true);
+                      setTodoError(null);
+                    }}
+                    onDraftTodoTitleChange={setDraftTodoTitle}
+                    onSubmitTodo={handleSubmitTodo}
+                    onCancelInlineTodo={() => {
+                      if (isSubmittingTodo) {
+                        return;
+                      }
+                      setDraftTodoTitle("");
+                      setTodoError(null);
+                      setIsAddingTodoInline(false);
+                    }}
+                    onToggleTodo={handleToggleTodo}
+                    onDeleteTodo={handleDeleteTodo}
+                    notes={currentWorkspaceNotes}
+                    noteError={noteError}
+                    isAddingNoteInline={isAddingNoteInline}
+                    draftNoteTitle={draftNoteTitle}
+                    draftNoteContent={draftNoteContent}
+                    onStartInlineNote={() => {
+                      setActiveWorkspaceApp("notes");
+                      setIsAddingNoteInline(true);
+                      setNoteError(null);
+                    }}
+                    onDraftNoteTitleChange={setDraftNoteTitle}
+                    onDraftNoteContentChange={setDraftNoteContent}
+                    onSubmitNote={handleSubmitNote}
+                    onCancelInlineNote={() => {
+                      setDraftNoteTitle("");
+                      setDraftNoteContent("");
+                      setNoteError(null);
+                      setIsAddingNoteInline(false);
+                    }}
+                  />
+                )}
+              </Box>
+            </Stack>
+          </Box>
+        </Box>
+      </Box>
 
       <CreateWorkspaceDialog
         open={isCreateWorkspaceDialogOpen}
