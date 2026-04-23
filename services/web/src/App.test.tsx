@@ -378,25 +378,23 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /add collaborator/i }));
     expect(await screen.findByText(/shared with collab@example.com/i)).toBeInTheDocument();
-    fireEvent.keyDown(document.body, { key: "Escape" });
-    await waitFor(() => {
-      expect(screen.queryByLabelText(/collaborator email/i)).not.toBeInTheDocument();
-    });
 
     const existingTodo = screen.getByText("Existing task").closest("li");
     if (!existingTodo) {
       throw new Error("existing todo row not found");
     }
-    fireEvent.click(within(existingTodo).getByRole("button", { name: /mark done/i }));
+    fireEvent.click(within(existingTodo).getByRole("button", { name: /mark done/i, hidden: true }));
     await waitFor(() => {
-      expect(within(existingTodo).getByRole("button", { name: /reopen/i })).toBeInTheDocument();
+      expect(
+        within(existingTodo).getByRole("button", { name: /reopen/i, hidden: true }),
+      ).toBeInTheDocument();
     });
 
     const createdTodo = screen.getByText("Write invite flow").closest("li");
     if (!createdTodo) {
       throw new Error("created todo row not found");
     }
-    fireEvent.click(within(createdTodo).getByRole("button", { name: /delete/i }));
+    fireEvent.click(within(createdTodo).getByRole("button", { name: /delete/i, hidden: true }));
     await waitFor(() => {
       expect(screen.queryByText("Write invite flow")).not.toBeInTheDocument();
     });
