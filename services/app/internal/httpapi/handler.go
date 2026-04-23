@@ -91,7 +91,7 @@ func (h *handler) handleSession(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.currentUser(r.Context(), r)
 	if errors.Is(err, ErrSessionNotFound) {
-		http.SetCookie(w, clearSessionCookie())
+		http.SetCookie(w, clearSessionCookie(h.googleAuth.SecureCookies(r)))
 		writeJSON(w, http.StatusOK, h.unauthenticatedSessionState())
 		return
 	}
@@ -151,7 +151,7 @@ func (h *handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, newSessionCookie(token))
+	http.SetCookie(w, newSessionCookie(token, h.googleAuth.SecureCookies(r)))
 
 	state, err := h.buildSessionState(r.Context(), user)
 	if err != nil {
@@ -275,7 +275,7 @@ func (h *handler) handleGoogleLoginCallback(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	http.SetCookie(w, newSessionCookie(sessionToken))
+	http.SetCookie(w, newSessionCookie(sessionToken, h.googleAuth.SecureCookies(r)))
 	http.Redirect(w, r, h.googleAuth.RedirectHomeURL(r, ""), http.StatusSeeOther)
 }
 
@@ -290,7 +290,7 @@ func (h *handler) handleLogout(w http.ResponseWriter, r *http.Request) {
 		_ = h.store.DeleteSession(r.Context(), cookie.Value)
 	}
 
-	http.SetCookie(w, clearSessionCookie())
+	http.SetCookie(w, clearSessionCookie(h.googleAuth.SecureCookies(r)))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -311,22 +311,28 @@ func (h *handler) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON body"})
 		return
 	}
-	if strings.TrimSpace(req.CurrentPassword) == "" {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "current password is required"})
-		return
-	}
 	if err := validatePassword(req.NewPassword); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
 		return
 	}
 
-	updatedUser, err := h.store.ResetPassword(r.Context(), user.Email, req.CurrentPassword, req.NewPassword)
+	var updatedUser SessionUser
+	var err error
+	if user.PasswordResetRequired {
+		updatedUser, err = h.store.CompletePasswordReset(r.Context(), user.Email, req.NewPassword)
+	} else {
+		if strings.TrimSpace(req.CurrentPassword) == "" {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "current password is required"})
+			return
+		}
+		updatedUser, err = h.store.ResetPassword(r.Context(), user.Email, req.CurrentPassword, req.NewPassword)
+	}
 	if errors.Is(err, ErrInvalidCredentials) {
 		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid credentials"})
 		return
 	}
 	if errors.Is(err, ErrUserNotFound) {
-		http.SetCookie(w, clearSessionCookie())
+		http.SetCookie(w, clearSessionCookie(h.googleAuth.SecureCookies(r)))
 		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "session expired"})
 		return
 	}
@@ -408,37 +414,53 @@ func (h *handler) handleTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != http.MethodPatch {
-		w.Header().Set("Allow", "PATCH")
+	switch r.Method {
+	case http.MethodPatch:
+		var req updateTodoRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON body"})
+			return
+		}
+		if req.Completed == nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "completed is required"})
+			return
+		}
+
+		todo, err := h.store.UpdateCompleted(r.Context(), user.Email, id, *req.Completed)
+		if errors.Is(err, ErrTodoNotFound) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "todo not found"})
+			return
+		}
+		if errors.Is(err, ErrWorkspaceAccessDenied) {
+			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, todo)
+	case http.MethodDelete:
+		err := h.store.DeleteTodo(r.Context(), user.Email, id)
+		if errors.Is(err, ErrTodoNotFound) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "todo not found"})
+			return
+		}
+		if errors.Is(err, ErrWorkspaceAccessDenied) {
+			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		w.Header().Set("Allow", "PATCH, DELETE")
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
-		return
 	}
-
-	var req updateTodoRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON body"})
-		return
-	}
-	if req.Completed == nil {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "completed is required"})
-		return
-	}
-
-	todo, err := h.store.UpdateCompleted(r.Context(), user.Email, id, *req.Completed)
-	if errors.Is(err, ErrTodoNotFound) {
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: "todo not found"})
-		return
-	}
-	if errors.Is(err, ErrWorkspaceAccessDenied) {
-		writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
-		return
-	}
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, todo)
 }
 
 func (h *handler) handleShares(w http.ResponseWriter, r *http.Request) {
@@ -520,7 +542,7 @@ func (h *handler) currentUser(ctx context.Context, r *http.Request) (*SessionUse
 func (h *handler) requireSession(w http.ResponseWriter, r *http.Request) (SessionUser, bool) {
 	user, err := h.currentUser(r.Context(), r)
 	if errors.Is(err, ErrSessionNotFound) {
-		http.SetCookie(w, clearSessionCookie())
+		http.SetCookie(w, clearSessionCookie(h.googleAuth.SecureCookies(r)))
 		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "session expired"})
 		return SessionUser{}, false
 	}

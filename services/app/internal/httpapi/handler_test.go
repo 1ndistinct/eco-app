@@ -58,6 +58,83 @@ func TestSessionStartsUnauthenticatedAndAuthenticatesAfterLogin(t *testing.T) {
 	}
 }
 
+func TestLoginSetsSecureSessionCookieWhenPublicBaseURLIsHTTPS(t *testing.T) {
+	store := newMemoryStore()
+	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	handler := NewHandler(store, HandlerOptions{
+		GoogleAuth: GoogleAuthConfig{
+			PublicBaseURL: "https://eco.treehousehl.com",
+		},
+	})
+
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"https://eco.treehousehl.com/api/auth/login",
+		strings.NewReader(`{"email":"owner@example.com","password":"owner-password-123"}`),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginRec := httptest.NewRecorder()
+	handler.ServeHTTP(loginRec, loginReq)
+
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("unexpected login status: %d body=%s", loginRec.Code, loginRec.Body.String())
+	}
+
+	sessionCookie := requireSessionCookie(t, loginRec)
+	if !sessionCookie.Secure {
+		t.Fatalf("expected secure session cookie for https public base url")
+	}
+}
+
+func TestLoginLeavesSessionCookieInsecureOnLocalHTTP(t *testing.T) {
+	store := newMemoryStore()
+	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	handler := NewHandler(store)
+	loginRec := login(t, handler, "owner@example.com", "owner-password-123")
+
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("unexpected login status: %d body=%s", loginRec.Code, loginRec.Body.String())
+	}
+
+	sessionCookie := requireSessionCookie(t, loginRec)
+	if sessionCookie.Secure {
+		t.Fatalf("expected non-secure session cookie for local http login")
+	}
+}
+
+func TestLoginSetsSecureSessionCookieWhenProxySignalsHTTPS(t *testing.T) {
+	store := newMemoryStore()
+	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	handler := NewHandler(store)
+	loginReq := httptest.NewRequest(
+		http.MethodPost,
+		"http://eco.treehousehl.com/api/auth/login",
+		strings.NewReader(`{"email":"owner@example.com","password":"owner-password-123"}`),
+	)
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginReq.Header.Set("X-Forwarded-Proto", "https")
+	loginRec := httptest.NewRecorder()
+	handler.ServeHTTP(loginRec, loginReq)
+
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("unexpected login status: %d body=%s", loginRec.Code, loginRec.Body.String())
+	}
+
+	sessionCookie := requireSessionCookie(t, loginRec)
+	if !sessionCookie.Secure {
+		t.Fatalf("expected secure session cookie when proxy signals https")
+	}
+}
+
 func TestProvisionedUserMustResetPasswordBeforeUsingTodos(t *testing.T) {
 	store := newMemoryStore()
 	provisionedUser, err := store.ProvisionUser(t.Context(), "reset@example.com")
@@ -81,7 +158,7 @@ func TestProvisionedUserMustResetPasswordBeforeUsingTodos(t *testing.T) {
 		t.Fatalf("unexpected todos body before reset: %q", got)
 	}
 
-	resetReq := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", strings.NewReader(`{"currentPassword":"`+provisionedUser.Password+`","newPassword":"reset-password-456"}`))
+	resetReq := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", strings.NewReader(`{"newPassword":"reset-password-456"}`))
 	resetReq.Header.Set("Content-Type", "application/json")
 	resetReq.AddCookie(cookie)
 	resetRec := httptest.NewRecorder()
@@ -104,6 +181,30 @@ func TestProvisionedUserMustResetPasswordBeforeUsingTodos(t *testing.T) {
 	}
 	if got := strings.TrimSpace(listRec.Body.String()); got != `{"items":[],"workspaceEmail":"reset@example.com"}` {
 		t.Fatalf("unexpected list body after reset: %q", got)
+	}
+}
+
+func TestAuthenticatedUserPasswordChangeStillRequiresCurrentPassword(t *testing.T) {
+	store := newMemoryStore()
+	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	handler := NewHandler(store)
+	loginRec := login(t, handler, "owner@example.com", "owner-password-123")
+	cookie := requireSessionCookie(t, loginRec)
+
+	resetReq := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", strings.NewReader(`{"newPassword":"replacement-password-456"}`))
+	resetReq.Header.Set("Content-Type", "application/json")
+	resetReq.AddCookie(cookie)
+	resetRec := httptest.NewRecorder()
+	handler.ServeHTTP(resetRec, resetReq)
+
+	if resetRec.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected reset status without current password: %d body=%s", resetRec.Code, resetRec.Body.String())
+	}
+	if got := strings.TrimSpace(resetRec.Body.String()); got != `{"error":"current password is required"}` {
+		t.Fatalf("unexpected reset body without current password: %q", got)
 	}
 }
 
@@ -131,7 +232,7 @@ func TestAuthenticatedUserCreatesTodoInOwnWorkspace(t *testing.T) {
 	}
 }
 
-func TestSharedWorkspaceCollaboratorCanViewAndUpdateOwnerTodos(t *testing.T) {
+func TestSharedWorkspaceCollaboratorCanViewUpdateAndDeleteOwnerTodos(t *testing.T) {
 	store := newMemoryStore()
 	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
 		t.Fatalf("seed owner: %v", err)
@@ -186,6 +287,27 @@ func TestSharedWorkspaceCollaboratorCanViewAndUpdateOwnerTodos(t *testing.T) {
 	}
 	if got := strings.TrimSpace(updateRec.Body.String()); got != `{"id":"1","title":"Share the queue","completed":true,"ownerEmail":"owner@example.com","workspaceEmail":"owner@example.com"}` {
 		t.Fatalf("unexpected collaborator update body: %q", got)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/todos/1", nil)
+	deleteReq.AddCookie(collabCookie)
+	deleteRec := httptest.NewRecorder()
+	handler.ServeHTTP(deleteRec, deleteReq)
+
+	if deleteRec.Code != http.StatusNoContent {
+		t.Fatalf("unexpected collaborator delete status: %d body=%s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	listAfterDeleteReq := httptest.NewRequest(http.MethodGet, "/api/todos?workspace=owner@example.com", nil)
+	listAfterDeleteReq.AddCookie(ownerCookie)
+	listAfterDeleteRec := httptest.NewRecorder()
+	handler.ServeHTTP(listAfterDeleteRec, listAfterDeleteReq)
+
+	if listAfterDeleteRec.Code != http.StatusOK {
+		t.Fatalf("unexpected owner list status after delete: %d body=%s", listAfterDeleteRec.Code, listAfterDeleteRec.Body.String())
+	}
+	if got := strings.TrimSpace(listAfterDeleteRec.Body.String()); got != `{"items":[],"workspaceEmail":"owner@example.com"}` {
+		t.Fatalf("unexpected owner list body after delete: %q", got)
 	}
 }
 

@@ -74,10 +74,15 @@ Backend owns the initial service contract handoff for the first vertical slice.
 ```json
 {"currentPassword":"temporary-password","newPassword":"replacement-password"}
 ```
+- first-login setup request after authenticating with Google or the temporary password:
+```json
+{"newPassword":"replacement-password"}
+```
 - response: `200 application/json`
 - requirements:
   - authenticated session required
   - `newPassword` must be at least 12 characters
+  - `currentPassword` is required only after the initial password-reset requirement has already been cleared
 
 ### `POST /api/auth/logout`
 - response: `204`
@@ -160,6 +165,26 @@ Todos are scoped to a workspace owned by a user. Each todo keeps both:
 {"error":"todo not found"}
 ```
 
+### `DELETE /api/todos/{id}`
+- response: `204`
+- requirements:
+  - authenticated session required
+  - password reset must already be completed
+  - caller must own or have access to the todo workspace
+- error responses:
+  - `401 application/json`
+```json
+{"error":"authentication required"}
+```
+  - `403 application/json`
+```json
+{"error":"workspace access denied"}
+```
+  - `404 application/json`
+```json
+{"error":"todo not found"}
+```
+
 ## Workspace Sharing API
 
 ### `GET /api/shares?workspace=owner@example.com`
@@ -199,6 +224,7 @@ Todos are scoped to a workspace owned by a user. Each todo keeps both:
 - Google login only succeeds for a verified Gmail address that exactly matches an existing provisioned user.
 - A successful Google login authenticates the user but does not clear the initial password-reset requirement.
 - Provisioned users who sign in with Google first still land in the password reset flow before todo or share actions are allowed.
+- While `passwordResetRequired` is still true, the reset flow only needs the new password because the authenticated session is already the proof of identity.
 - Todos and sessions are stored in Postgres.
 - Passwords are stored as hashes only.
 - Schema changes are managed with embedded goose migrations.

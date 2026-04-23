@@ -126,6 +126,34 @@ func (s *memoryStore) ResetPassword(_ context.Context, email string, currentPass
 	}, nil
 }
 
+func (s *memoryStore) CompletePasswordReset(_ context.Context, email string, newPassword string) (SessionUser, error) {
+	if err := validatePassword(newPassword); err != nil {
+		return SessionUser{}, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	user, exists := s.users[normalizeEmail(email)]
+	if !exists {
+		return SessionUser{}, ErrUserNotFound
+	}
+
+	passwordHash, err := hashPassword(newPassword)
+	if err != nil {
+		return SessionUser{}, err
+	}
+
+	user.passwordHash = passwordHash
+	user.passwordResetRequired = false
+	s.users[user.email] = user
+
+	return SessionUser{
+		Email:                 user.email,
+		PasswordResetRequired: false,
+	}, nil
+}
+
 func (s *memoryStore) CreateSession(_ context.Context, email string) (string, error) {
 	token, err := generateSecretString(24)
 	if err != nil {
@@ -329,6 +357,27 @@ func (s *memoryStore) UpdateCompleted(_ context.Context, actorEmail string, id s
 	}
 
 	return Todo{}, ErrTodoNotFound
+}
+
+func (s *memoryStore) DeleteTodo(_ context.Context, actorEmail string, id string) error {
+	normalizedActorEmail := normalizeEmail(actorEmail)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for index, todo := range s.todos {
+		if todo.ID != id {
+			continue
+		}
+		if !s.hasAccessLocked(normalizedActorEmail, todo.WorkspaceEmail) {
+			return ErrWorkspaceAccessDenied
+		}
+
+		s.todos = append(s.todos[:index], s.todos[index+1:]...)
+		return nil
+	}
+
+	return ErrTodoNotFound
 }
 
 func (s *memoryStore) ProvisionUser(_ context.Context, email string) (ProvisionedUser, error) {

@@ -45,6 +45,7 @@ type AppStore interface {
 	AuthenticateUser(ctx context.Context, email string, password string) (SessionUser, error)
 	AuthenticateGoogleUser(ctx context.Context, email string) (SessionUser, error)
 	ResetPassword(ctx context.Context, email string, currentPassword string, newPassword string) (SessionUser, error)
+	CompletePasswordReset(ctx context.Context, email string, newPassword string) (SessionUser, error)
 	CreateSession(ctx context.Context, email string) (string, error)
 	GetSession(ctx context.Context, token string) (SessionUser, error)
 	DeleteSession(ctx context.Context, token string) error
@@ -54,6 +55,7 @@ type AppStore interface {
 	ListTodos(ctx context.Context, actorEmail string, workspaceEmail string) ([]Todo, error)
 	CreateTodo(ctx context.Context, actorEmail string, workspaceEmail string, title string) (Todo, error)
 	UpdateCompleted(ctx context.Context, actorEmail string, id string, completed bool) (Todo, error)
+	DeleteTodo(ctx context.Context, actorEmail string, id string) error
 	ProvisionUser(ctx context.Context, email string) (ProvisionedUser, error)
 }
 

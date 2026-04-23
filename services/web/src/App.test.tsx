@@ -178,13 +178,8 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(
-      await screen.findByText(/replace the temporary password/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/choose a password to finish setup/i)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/current password/i), {
-      target: { value: "temporary-password-123" },
-    });
     fireEvent.change(screen.getByLabelText(/new password/i), {
       target: { value: "replacement-password-456" },
     });
@@ -194,6 +189,13 @@ describe("App", () => {
       await screen.findByRole("heading", { name: /shared queues, explicit owners/i }),
     ).toBeInTheDocument();
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/auth/reset-password");
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newPassword: "replacement-password-456",
+      }),
+    });
   });
 
   it("reloads the signed-out session after logout so Google login remains available", async () => {
@@ -352,7 +354,8 @@ describe("App", () => {
             headers: { "Content-Type": "application/json" },
           },
         ),
-      );
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     render(<App />);
 
@@ -374,6 +377,11 @@ describe("App", () => {
     expect(
       await screen.findByRole("button", { name: /mark existing task as open/i }),
     ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /delete write invite flow/i }));
+    await waitFor(() => {
+      expect(screen.queryByText("Write invite flow")).not.toBeInTheDocument();
+    });
 
     expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/todos");
     expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
@@ -400,6 +408,11 @@ describe("App", () => {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ completed: true }),
+    });
+
+    expect(fetchMock.mock.calls[6]?.[0]).toBe("/api/todos/2");
+    expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({
+      method: "DELETE",
     });
   });
 });

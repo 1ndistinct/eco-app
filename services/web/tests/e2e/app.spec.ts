@@ -16,12 +16,11 @@ test("renders an authenticated workspace, creates a todo, and completes it", asy
   await page.getByRole("button", { name: /log in/i }).click();
 
   const needsPasswordReset = await page
-    .getByText(/replace the temporary password/i)
+    .getByText(/choose a password to finish setup/i)
     .isVisible()
     .catch(() => false);
 
   if (needsPasswordReset) {
-    await page.getByLabel(/current password/i).fill(loginPassword!);
     await page.getByLabel(/new password/i).fill(resetPassword);
     await page.getByRole("button", { name: /save password/i }).click();
   }
@@ -39,4 +38,6 @@ test("renders an authenticated workspace, creates a todo, and completes it", asy
   await todoCard.getByRole("button", { name: /mark done/i }).click();
   await expect(todoCard.getByText(/completed/i)).toBeVisible();
   await expect(todoCard.getByRole("button", { name: /reopen/i })).toBeVisible();
+  await todoCard.getByRole("button", { name: new RegExp(`delete ${title}`, "i") }).click();
+  await expect(todoCard).toHaveCount(0);
 });

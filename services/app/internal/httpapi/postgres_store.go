@@ -82,6 +82,25 @@ func (s *PostgresStore) ResetPassword(ctx context.Context, email string, current
 		return SessionUser{}, ErrInvalidCredentials
 	}
 
+	return s.completePasswordReset(ctx, normalizedEmail, newPassword)
+}
+
+func (s *PostgresStore) CompletePasswordReset(ctx context.Context, email string, newPassword string) (SessionUser, error) {
+	if err := validatePassword(newPassword); err != nil {
+		return SessionUser{}, err
+	}
+
+	normalizedEmail := normalizeEmail(email)
+	if _, err := s.userByEmail(ctx, normalizedEmail); errors.Is(err, sql.ErrNoRows) {
+		return SessionUser{}, ErrUserNotFound
+	} else if err != nil {
+		return SessionUser{}, err
+	}
+
+	return s.completePasswordReset(ctx, normalizedEmail, newPassword)
+}
+
+func (s *PostgresStore) completePasswordReset(ctx context.Context, normalizedEmail string, newPassword string) (SessionUser, error) {
 	passwordHash, err := hashPassword(newPassword)
 	if err != nil {
 		return SessionUser{}, err
@@ -340,6 +359,46 @@ func (s *PostgresStore) UpdateCompleted(ctx context.Context, actorEmail string, 
 	}
 
 	return todo, nil
+}
+
+func (s *PostgresStore) DeleteTodo(ctx context.Context, actorEmail string, id string) error {
+	numericID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return ErrTodoNotFound
+	}
+
+	var workspaceEmail string
+	if err := s.db.GetContext(ctx, &workspaceEmail, `SELECT workspace_email FROM todos WHERE id = $1`, numericID); errors.Is(err, sql.ErrNoRows) {
+		return ErrTodoNotFound
+	} else if err != nil {
+		return err
+	}
+	if err := s.authorizeWorkspace(ctx, normalizeEmail(actorEmail), workspaceEmail); err != nil {
+		return err
+	}
+
+	query, args, err := s.builder.
+		Delete("todos").
+		Where(sq.Eq{"id": numericID}).
+		ToSql()
+	if err != nil {
+		return err
+	}
+
+	result, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrTodoNotFound
+	}
+
+	return nil
 }
 
 func (s *PostgresStore) ProvisionUser(ctx context.Context, email string) (ProvisionedUser, error) {

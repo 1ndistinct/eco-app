@@ -42,6 +42,7 @@ This repository is the standard multi-service starting point for echo-agentic-to
 - Provisioned users receive an auto-generated password and must reset it on first login.
 - Google login is supported for already-provisioned users only when the verified Google account is a Gmail address and exactly matches the stored user email.
 - Google-authenticated provisioned users still have to complete the password reset flow before workspace access unlocks.
+- The first-login password setup now only asks for the new password once the user is authenticated.
 - Keep Google OAuth credentials in a local-only Helm values file such as `deploy/k3d/tm.secrets.yaml`, based on `deploy/k3d/tm.secrets.example.yaml`.
 - For the `tm` deployment, set the Google OAuth public base URL to `https://eco.treehousehl.com`.
 - Register `https://eco.treehousehl.com/api/auth/google/callback` as the Google OAuth redirect URI for the `tm` deployment.

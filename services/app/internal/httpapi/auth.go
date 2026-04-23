@@ -72,24 +72,26 @@ func hashToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func newSessionCookie(token string) *http.Cookie {
+func newSessionCookie(token string, secure bool) *http.Cookie {
 	return &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
 		MaxAge:   int(sessionLifetime.Seconds()),
 	}
 }
 
-func clearSessionCookie() *http.Cookie {
+func clearSessionCookie(secure bool) *http.Cookie {
 	return &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	}

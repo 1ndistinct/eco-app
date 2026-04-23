@@ -3,6 +3,7 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import CircleRoundedIcon from "@mui/icons-material/CircleRounded";
 import DoneRoundedIcon from "@mui/icons-material/DoneRounded";
 import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
@@ -143,7 +144,6 @@ export function App() {
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  const [resetCurrentPassword, setResetCurrentPassword] = useState("");
   const [resetNewPassword, setResetNewPassword] = useState("");
   const [todoTitle, setTodoTitle] = useState("");
   const [shareEmail, setShareEmail] = useState("");
@@ -155,6 +155,7 @@ export function App() {
   const [isSubmittingTodo, setIsSubmittingTodo] = useState(false);
   const [isSubmittingShare, setIsSubmittingShare] = useState(false);
   const [updatingTodoIds, setUpdatingTodoIds] = useState<string[]>([]);
+  const [deletingTodoIds, setDeletingTodoIds] = useState<string[]>([]);
 
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -354,7 +355,6 @@ export function App() {
 
       const data = (await response.json()) as SessionState;
       setSession(normalizeSessionState(data));
-      setResetCurrentPassword("");
       setResetNewPassword("");
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "Unable to log in.");
@@ -366,8 +366,8 @@ export function App() {
   async function handlePasswordReset(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (resetCurrentPassword.trim() === "" || resetNewPassword.trim() === "") {
-      setResetError("Current password and new password are required.");
+    if (resetNewPassword.trim() === "") {
+      setResetError("New password is required.");
       return;
     }
 
@@ -381,7 +381,6 @@ export function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          currentPassword: resetCurrentPassword,
           newPassword: resetNewPassword,
         }),
       });
@@ -392,7 +391,6 @@ export function App() {
 
       const data = (await response.json()) as SessionState;
       setSession(normalizeSessionState(data));
-      setResetCurrentPassword("");
       setResetNewPassword("");
     } catch (error) {
       setResetError(
@@ -423,6 +421,8 @@ export function App() {
     setTodos([]);
     setShares([]);
     setShareSuccess(null);
+    setUpdatingTodoIds([]);
+    setDeletingTodoIds([]);
   }
 
   async function handleSubmitTodo(event: FormEvent<HTMLFormElement>) {
@@ -500,6 +500,31 @@ export function App() {
       setTodoError(error instanceof Error ? error.message : "Unable to update todo.");
     } finally {
       setUpdatingTodoIds((currentIds) => currentIds.filter((id) => id !== todo.id));
+    }
+  }
+
+  async function handleDeleteTodo(todo: Todo) {
+    setTodoError(null);
+    setDeletingTodoIds((currentIds) => [...currentIds, todo.id]);
+
+    try {
+      const response = await fetch(`${TODO_ENDPOINT}/${todo.id}`, {
+        method: "DELETE",
+      });
+
+      if (response.status === 401) {
+        setSession(UNAUTHENTICATED_SESSION);
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "Unable to delete todo."));
+      }
+
+      setTodos((currentTodos) => currentTodos.filter((currentTodo) => currentTodo.id !== todo.id));
+    } catch (error) {
+      setTodoError(error instanceof Error ? error.message : "Unable to delete todo.");
+    } finally {
+      setDeletingTodoIds((currentIds) => currentIds.filter((id) => id !== todo.id));
     }
   }
 
@@ -692,27 +717,21 @@ export function App() {
 
   if (requiresPasswordReset) {
     return renderAuthShell(
-      "Replace the temporary password",
-      "Provisioned accounts land with a one-time password. Reset it now, then the workspace unlocks fully.",
+      "Choose a password to finish setup",
+      "The account is authenticated, but the workspace stays locked until a permanent password is set.",
       <Stack spacing={3}>
         <Stack spacing={1}>
           <Typography className="section-kicker">
             <VpnKeyRoundedIcon sx={{ fontSize: 16 }} />
-            Password reset
+            Account setup
           </Typography>
           <Typography variant="h4">{currentUser?.email}</Typography>
+          <Typography color="text.secondary">
+            This works the same whether you arrived with Google login or the temporary password.
+          </Typography>
         </Stack>
         <Box component="form" onSubmit={handlePasswordReset}>
           <Stack spacing={2}>
-            <TextField
-              label="Current password"
-              type="password"
-              value={resetCurrentPassword}
-              onChange={(event) => setResetCurrentPassword(event.target.value)}
-              autoComplete="current-password"
-              disabled={isSubmittingPasswordReset}
-              fullWidth
-            />
             <TextField
               label="New password"
               type="password"
@@ -1205,6 +1224,8 @@ export function App() {
                       {todos.map((todo, index) => {
                         const isComplete = todo.completed;
                         const isUpdating = updatingTodoIds.includes(todo.id);
+                        const isDeleting = deletingTodoIds.includes(todo.id);
+                        const isMutating = isUpdating || isDeleting;
                         const ownerLabel =
                           todo.ownerEmail === currentUser?.email
                             ? "Owned by you"
@@ -1223,7 +1244,7 @@ export function App() {
                               bgcolor: isComplete
                                 ? alpha("#2d7f5e", 0.08)
                                 : alpha("#ffffff", 0.68),
-                              opacity: isUpdating ? 0.78 : 1,
+                              opacity: isMutating ? 0.78 : 1,
                             }}
                           >
                             <CardContent sx={{ p: { xs: 2.25, md: 2.75 } }}>
@@ -1283,7 +1304,7 @@ export function App() {
                                   <Button
                                     variant={isComplete ? "outlined" : "contained"}
                                     color={isComplete ? "inherit" : "success"}
-                                    disabled={isUpdating}
+                                    disabled={isMutating}
                                     onClick={() => void handleToggleTodo(todo)}
                                     startIcon={
                                       isUpdating ? (
@@ -1302,6 +1323,23 @@ export function App() {
                                     sx={{ minWidth: 132 }}
                                   >
                                     {isUpdating ? "Saving…" : isComplete ? "Reopen" : "Mark done"}
+                                  </Button>
+                                  <Button
+                                    variant="outlined"
+                                    color="error"
+                                    disabled={isMutating}
+                                    onClick={() => void handleDeleteTodo(todo)}
+                                    startIcon={
+                                      isDeleting ? (
+                                        <CircularProgress size={16} color="inherit" />
+                                      ) : (
+                                        <DeleteOutlineRoundedIcon />
+                                      )
+                                    }
+                                    aria-label={`Delete ${todo.title}`}
+                                    sx={{ minWidth: 120 }}
+                                  >
+                                    {isDeleting ? "Deleting…" : "Delete"}
                                   </Button>
                                 </Stack>
                               </Stack>
