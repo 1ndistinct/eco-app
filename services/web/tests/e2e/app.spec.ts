@@ -25,11 +25,12 @@ test("renders an authenticated workspace, creates a todo, and completes it", asy
     await page.getByRole("button", { name: /save password/i }).click();
   }
 
-  await expect(page.getByRole("heading", { name: /named queues, explicit owners/i })).toBeVisible();
-  await expect(page.getByText(/\d+\s+items remaining/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /workspaces/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /todos/i })).toBeVisible();
 
+  await page.getByRole("button", { name: /add item/i }).click();
   await page.getByLabel(/new todo/i).fill(title);
-  await page.getByRole("button", { name: /add todo/i }).click();
+  await page.getByRole("button", { name: /^save$/i }).click();
 
   const todoCard = page.getByRole("listitem").filter({ hasText: title });
 

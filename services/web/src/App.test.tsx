@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
@@ -28,7 +28,6 @@ describe("App", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("confirm", vi.fn(() => true));
   });
 
   afterEach(() => {
@@ -132,8 +131,8 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /log in/i }));
 
     expect(await screen.findByText("Ship auth flow")).toBeInTheDocument();
-    expect(screen.getByText(/owned by you/i)).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /personal/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toHaveTextContent("Personal · owner@example.com");
+    expect(screen.getByRole("heading", { name: "Personal" })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(4);
@@ -184,16 +183,14 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByText(/choose a password to finish setup/i)).toBeInTheDocument();
+    expect(await screen.findByText(/set password/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/new password/i), {
       target: { value: "replacement-password-456" },
     });
     fireEvent.click(screen.getByRole("button", { name: /save password/i }));
 
-    expect(
-      await screen.findByRole("heading", { name: /named queues, explicit owners/i }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /workspaces/i })).toBeInTheDocument();
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/auth/reset-password");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: "POST",
@@ -279,7 +276,7 @@ describe("App", () => {
     expect(sessionRequestCount).toBe(2);
   });
 
-  it("creates, shares, updates, and deletes todos inside the authenticated workspace", async () => {
+  it("creates, shares, updates, and deletes todos inside the workspace app", async () => {
     fetchMock
       .mockResolvedValueOnce(
         new Response(JSON.stringify(authenticatedSession()), {
@@ -367,24 +364,33 @@ describe("App", () => {
 
     expect(await screen.findByText("Existing task")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: /add item/i }));
     fireEvent.change(screen.getByLabelText(/new todo/i), {
       target: { value: "Write invite flow" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /add todo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText("Write invite flow")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/collaborator email/i), {
       target: { value: "collab@example.com" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /share workspace/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add collaborator/i }));
     expect(await screen.findByText(/shared with collab@example.com/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /mark existing task as done/i }));
-    expect(
-      await screen.findByRole("button", { name: /mark existing task as open/i }),
-    ).toBeInTheDocument();
+    const existingTodo = screen.getByText("Existing task").closest("li");
+    if (!existingTodo) {
+      throw new Error("existing todo row not found");
+    }
+    fireEvent.click(within(existingTodo).getByRole("button", { name: /mark done/i }));
+    await waitFor(() => {
+      expect(within(existingTodo).getByRole("button", { name: /reopen/i })).toBeInTheDocument();
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: /delete write invite flow/i }));
+    const createdTodo = screen.getByText("Write invite flow").closest("li");
+    if (!createdTodo) {
+      throw new Error("created todo row not found");
+    }
+    fireEvent.click(within(createdTodo).getByRole("button", { name: /delete/i }));
     await waitFor(() => {
       expect(screen.queryByText("Write invite flow")).not.toBeInTheDocument();
     });
@@ -422,7 +428,7 @@ describe("App", () => {
     });
   });
 
-  it("creates and deletes an owned workspace", async () => {
+  it("creates a workspace from the header and deletes it from settings", async () => {
     fetchMock
       .mockResolvedValueOnce(
         new Response(JSON.stringify(authenticatedSession()), {
@@ -521,20 +527,27 @@ describe("App", () => {
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: /named queues, explicit owners/i });
+    await screen.findByRole("heading", { name: /workspaces/i });
 
-    fireEvent.change(screen.getByLabelText(/workspace name/i), {
+    fireEvent.click(screen.getByRole("button", { name: /create workspace/i }));
+    fireEvent.change(await screen.findByLabelText(/workspace name/i), {
       target: { value: "Launch Queue" },
     });
     fireEvent.change(screen.getByLabelText(/description/i), {
       target: { value: "Track rollout work." },
     });
-    fireEvent.click(screen.getByRole("button", { name: /create workspace/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^create workspace$/i }));
 
     expect(await screen.findByText(/created launch queue/i)).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /launch queue/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: /create workspace/i })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("combobox")).toHaveTextContent("Launch Queue · owner@example.com");
 
-    fireEvent.click(screen.getByRole("button", { name: /delete workspace/i }));
+    fireEvent.click(screen.getByRole("button", { name: /workspace settings/i }));
+    expect(await screen.findByRole("heading", { name: /workspace settings/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^delete workspace$/i }));
+
     expect(await screen.findByText(/deleted launch queue/i)).toBeInTheDocument();
 
     expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/workspaces");

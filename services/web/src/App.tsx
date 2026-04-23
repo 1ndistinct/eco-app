@@ -1,33 +1,35 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
-import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
-import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
-import CircleRoundedIcon from "@mui/icons-material/CircleRounded";
 import DoneRoundedIcon from "@mui/icons-material/DoneRounded";
 import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
-import RocketLaunchRoundedIcon from "@mui/icons-material/RocketLaunchRounded";
-import ShareRoundedIcon from "@mui/icons-material/ShareRounded";
-import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
+import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import VpnKeyRoundedIcon from "@mui/icons-material/VpnKeyRounded";
 import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   CircularProgress,
   Container,
-  LinearProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
+import { SelectChangeEvent } from "@mui/material/Select";
 import { alpha } from "@mui/material/styles";
 
 type Todo = {
@@ -162,6 +164,10 @@ async function readErrorMessage(response: Response, fallback: string) {
   return fallback;
 }
 
+function formatWorkspaceLabel(workspace: WorkspaceAccess) {
+  return `${workspace.name} · ${workspace.ownerEmail}`;
+}
+
 export function App() {
   const [session, setSession] = useState<SessionState | null>(null);
   const [selectedWorkspace, setSelectedWorkspace] = useState("");
@@ -173,16 +179,19 @@ export function App() {
   const [resetNewPassword, setResetNewPassword] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDescription, setWorkspaceDescription] = useState("");
-  const [todoTitle, setTodoTitle] = useState("");
   const [shareEmail, setShareEmail] = useState("");
+  const [draftTodoTitle, setDraftTodoTitle] = useState("");
 
   const [isInitializing, setIsInitializing] = useState(true);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isSubmittingPasswordReset, setIsSubmittingPasswordReset] = useState(false);
+  const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
   const [isSubmittingWorkspace, setIsSubmittingWorkspace] = useState(false);
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
   const [isSubmittingTodo, setIsSubmittingTodo] = useState(false);
   const [isSubmittingShare, setIsSubmittingShare] = useState(false);
+  const [isAddingTodoInline, setIsAddingTodoInline] = useState(false);
+  const [viewMode, setViewMode] = useState<"workspace" | "settings">("workspace");
   const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(null);
   const [updatingTodoIds, setUpdatingTodoIds] = useState<string[]>([]);
   const [deletingTodoIds, setDeletingTodoIds] = useState<string[]>([]);
@@ -270,11 +279,13 @@ export function App() {
       setSelectedWorkspace("");
       setTodos([]);
       setShares([]);
+      setViewMode("workspace");
       return;
     }
 
     if (accessibleWorkspaces.length === 0) {
       setSelectedWorkspace("");
+      setViewMode("workspace");
       return;
     }
 
@@ -286,7 +297,10 @@ export function App() {
         return currentWorkspaceId;
       }
 
-      return accessibleWorkspaces.find((workspace) => workspace.role === "owner")?.id ?? accessibleWorkspaces[0].id;
+      return (
+        accessibleWorkspaces.find((workspace) => workspace.role === "owner")?.id ??
+        accessibleWorkspaces[0].id
+      );
     });
   }, [accessibleWorkspaces, isAuthenticated, requiresPasswordReset]);
 
@@ -363,9 +377,42 @@ export function App() {
 
   const remainingCount = todos.filter((todo) => !todo.completed).length;
   const completedCount = todos.length - remainingCount;
-  const completionRatio =
-    todos.length === 0 ? 0 : Math.round((completedCount / todos.length) * 100);
-  const focusTodo = todos.find((todo) => !todo.completed)?.title;
+
+  function resetWorkspaceComposer() {
+    setWorkspaceName("");
+    setWorkspaceDescription("");
+  }
+
+  function resetTodoComposer() {
+    setDraftTodoTitle("");
+    setIsAddingTodoInline(false);
+  }
+
+  function openCreateWorkspaceDialog() {
+    setWorkspaceManageError(null);
+    setWorkspaceSuccess(null);
+    resetWorkspaceComposer();
+    setIsCreateWorkspaceDialogOpen(true);
+  }
+
+  function closeCreateWorkspaceDialog() {
+    if (isSubmittingWorkspace) {
+      return;
+    }
+
+    setIsCreateWorkspaceDialogOpen(false);
+    resetWorkspaceComposer();
+  }
+
+  function handleWorkspaceSelection(event: SelectChangeEvent<string>) {
+    setSelectedWorkspace(event.target.value);
+    setViewMode("workspace");
+    setWorkspaceError(null);
+    setShareError(null);
+    setShareSuccess(null);
+    setTodoError(null);
+    resetTodoComposer();
+  }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -458,15 +505,17 @@ export function App() {
     } catch {
       setSession(UNAUTHENTICATED_SESSION);
     }
+
     setLoginPassword("");
     setSelectedWorkspace("");
-    setWorkspaceName("");
-    setWorkspaceDescription("");
-    setTodos([]);
     setShares([]);
+    setTodos([]);
     setWorkspaceManageError(null);
     setWorkspaceSuccess(null);
     setShareSuccess(null);
+    setViewMode("workspace");
+    resetWorkspaceComposer();
+    resetTodoComposer();
     setUpdatingTodoIds([]);
     setDeletingTodoIds([]);
     setDeletingWorkspaceId(null);
@@ -524,8 +573,8 @@ export function App() {
           : currentSession,
       );
       setSelectedWorkspace(createdWorkspace.id);
-      setWorkspaceName("");
-      setWorkspaceDescription("");
+      setViewMode("workspace");
+      closeCreateWorkspaceDialog();
       setWorkspaceSuccess(`Created ${createdWorkspace.name}.`);
     } catch (error) {
       setWorkspaceManageError(
@@ -536,20 +585,17 @@ export function App() {
     }
   }
 
-  async function handleDeleteWorkspace(workspace: WorkspaceAccess) {
-    const confirmed = window.confirm(
-      `Delete "${workspace.name}"? This removes its todos and collaborators.`,
-    );
-    if (!confirmed) {
+  async function handleDeleteWorkspace() {
+    if (!currentWorkspace) {
       return;
     }
 
-    setDeletingWorkspaceId(workspace.id);
+    setDeletingWorkspaceId(currentWorkspace.id);
     setWorkspaceManageError(null);
     setWorkspaceSuccess(null);
 
     try {
-      const response = await fetch(`${WORKSPACE_ENDPOINT}/${workspace.id}`, {
+      const response = await fetch(`${WORKSPACE_ENDPOINT}/${currentWorkspace.id}`, {
         method: "DELETE",
       });
 
@@ -566,17 +612,16 @@ export function App() {
           ? normalizeSessionState({
               ...currentSession,
               accessibleWorkspaces: (currentSession.accessibleWorkspaces ?? []).filter(
-                (currentWorkspace) => currentWorkspace.id !== workspace.id,
+                (workspace) => workspace.id !== currentWorkspace.id,
               ),
             })
           : currentSession,
       );
-      if (selectedWorkspace === workspace.id) {
-        setSelectedWorkspace("");
-        setTodos([]);
-        setShares([]);
-      }
-      setWorkspaceSuccess(`Deleted ${workspace.name}.`);
+      setSelectedWorkspace("");
+      setTodos([]);
+      setShares([]);
+      setViewMode("workspace");
+      setWorkspaceSuccess(`Deleted ${currentWorkspace.name}.`);
     } catch (error) {
       setWorkspaceManageError(
         error instanceof Error ? error.message : "Unable to delete the workspace.",
@@ -586,10 +631,25 @@ export function App() {
     }
   }
 
+  function startInlineTodoComposer() {
+    if (!currentWorkspace) {
+      return;
+    }
+
+    setTodoError(null);
+    setDraftTodoTitle("");
+    setIsAddingTodoInline(true);
+  }
+
+  function cancelInlineTodoComposer() {
+    setTodoError(null);
+    resetTodoComposer();
+  }
+
   async function handleSubmitTodo(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const trimmedTitle = todoTitle.trim();
+    const trimmedTitle = draftTodoTitle.trim();
     if (trimmedTitle === "") {
       setTodoError("Title is required.");
       return;
@@ -620,7 +680,7 @@ export function App() {
 
       const createdTodo = (await response.json()) as Todo;
       setTodos((currentTodos) => [...currentTodos, createdTodo]);
-      setTodoTitle("");
+      resetTodoComposer();
     } catch (error) {
       setTodoError(error instanceof Error ? error.message : "Unable to create todo.");
     } finally {
@@ -753,19 +813,19 @@ export function App() {
             <Paper
               elevation={0}
               className="hero-panel"
-              sx={{ p: { xs: 3, md: 4 }, borderRadius: { xs: "28px", md: "34px" } }}
+              sx={{ p: { xs: 3, md: 4 }, borderRadius: { xs: "20px", md: "24px" } }}
             >
-              <Stack spacing={2.5}>
+              <Stack spacing={2}>
                 <Chip
                   icon={<VpnKeyRoundedIcon />}
-                  label="Private workspace access"
+                  label="Workspace access"
                   sx={{
                     alignSelf: "flex-start",
                     bgcolor: alpha("#16423c", 0.08),
                     color: "text.primary",
                   }}
                 />
-                <Typography variant="h2">{title}</Typography>
+                <Typography variant="h3">{title}</Typography>
                 <Typography color="text.secondary">{subtitle}</Typography>
                 {helper}
               </Stack>
@@ -774,7 +834,7 @@ export function App() {
             <Paper
               elevation={0}
               className="soft-panel auth-panel"
-              sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "26px", md: "30px" } }}
+              sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
             >
               {content}
             </Paper>
@@ -784,13 +844,430 @@ export function App() {
     );
   }
 
+  function renderWorkspaceView() {
+    if (!currentWorkspace) {
+      return (
+        <Paper
+          elevation={0}
+          className="soft-panel workspace-panel"
+          sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
+        >
+          <Stack spacing={1}>
+            <Typography variant="h5">No workspace selected</Typography>
+            <Typography color="text.secondary">
+              Choose a workspace in the header or create a new one.
+            </Typography>
+          </Stack>
+        </Paper>
+      );
+    }
+
+    return (
+      <Stack spacing={2.5}>
+        <Paper
+          elevation={0}
+          className="soft-panel workspace-panel"
+          sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
+        >
+          <Stack spacing={2}>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1.5}
+              sx={{ justifyContent: "space-between", alignItems: { md: "flex-start" } }}
+            >
+              <Box>
+                <Typography variant="h4">{currentWorkspace.name}</Typography>
+                <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+                  {currentWorkspace.description || "No description."}
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                <Chip
+                  icon={<PersonRoundedIcon />}
+                  label={`Owner: ${currentWorkspace.ownerEmail}`}
+                />
+                <Chip
+                  icon={<GroupRoundedIcon />}
+                  label={`${collaboratorEmails.length + 1} member${collaboratorEmails.length + 1 === 1 ? "" : "s"}`}
+                />
+              </Stack>
+            </Stack>
+
+            <Box className="subapp-shell">
+              <Typography variant="overline" color="text.secondary">
+                Workspace app
+              </Typography>
+              <Box className="subapp-nav">
+                <Button variant="contained" color="primary" disableElevation>
+                  Todos
+                </Button>
+              </Box>
+            </Box>
+          </Stack>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          className="soft-panel workspace-panel"
+          sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
+        >
+          <Stack spacing={2}>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1}
+              sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}
+            >
+              <Box>
+                <Typography variant="h6">Collaborators</Typography>
+                <Typography color="text.secondary">
+                  Everyone listed here can work inside this workspace.
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Box className="chip-list">
+              <Chip
+                icon={<PersonRoundedIcon />}
+                label={`${currentWorkspace.ownerEmail} · owner`}
+                sx={{
+                  bgcolor: alpha("#16423c", 0.08),
+                  color: "text.primary",
+                }}
+              />
+              {collaboratorEmails.map((email) => (
+                <Chip
+                  key={email}
+                  icon={<GroupRoundedIcon />}
+                  label={email}
+                  sx={{
+                    bgcolor: alpha("#f05d3f", 0.08),
+                    color: "text.primary",
+                  }}
+                />
+              ))}
+            </Box>
+
+            <Box component="form" onSubmit={handleShareWorkspace} aria-label="Share workspace">
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={1.5}
+                sx={{ alignItems: { md: "flex-start" } }}
+              >
+                <TextField
+                  label="Collaborator email"
+                  type="email"
+                  value={shareEmail}
+                  onChange={(event) => setShareEmail(event.target.value)}
+                  autoComplete="email"
+                  disabled={isSubmittingShare}
+                  fullWidth
+                />
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  disabled={isSubmittingShare || selectedWorkspace === ""}
+                  startIcon={
+                    isSubmittingShare ? (
+                      <CircularProgress size={18} color="inherit" />
+                    ) : (
+                      <AddRoundedIcon />
+                    )
+                  }
+                  sx={{ minWidth: { md: 160 }, alignSelf: "flex-start" }}
+                >
+                  {isSubmittingShare ? "Adding..." : "Add collaborator"}
+                </Button>
+              </Stack>
+            </Box>
+
+            {shareError ? <Alert severity="error">{shareError}</Alert> : null}
+            {shareSuccess ? <Alert severity="success">{shareSuccess}</Alert> : null}
+          </Stack>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          className="soft-panel workspace-panel"
+          sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
+        >
+          <Stack spacing={2}>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1.5}
+              sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}
+            >
+              <Box>
+                <Typography variant="h6">Todos</Typography>
+                <Typography color="text.secondary">
+                  {remainingCount} open, {completedCount} completed.
+                </Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                color="inherit"
+                startIcon={<AddRoundedIcon />}
+                onClick={startInlineTodoComposer}
+                disabled={isAddingTodoInline || selectedWorkspace === ""}
+              >
+                Add item
+              </Button>
+            </Stack>
+
+            {todoError ? <Alert severity="error">{todoError}</Alert> : null}
+
+            {isAddingTodoInline ? (
+              <Paper elevation={0} className="todo-row todo-row-editor">
+                <Box component="form" onSubmit={handleSubmitTodo}>
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={1.5}
+                    sx={{ alignItems: { md: "flex-start" } }}
+                  >
+                    <TextField
+                      label="New todo"
+                      value={draftTodoTitle}
+                      onChange={(event) => setDraftTodoTitle(event.target.value)}
+                      autoFocus
+                      disabled={isSubmittingTodo}
+                      fullWidth
+                    />
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        color="primary"
+                        disabled={isSubmittingTodo}
+                        startIcon={
+                          isSubmittingTodo ? (
+                            <CircularProgress size={18} color="inherit" />
+                          ) : (
+                            <DoneRoundedIcon />
+                          )
+                        }
+                      >
+                        {isSubmittingTodo ? "Saving..." : "Save"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="text"
+                        color="inherit"
+                        disabled={isSubmittingTodo}
+                        onClick={cancelInlineTodoComposer}
+                      >
+                        Cancel
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </Box>
+              </Paper>
+            ) : null}
+
+            {isWorkspaceLoading ? (
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+                <CircularProgress size={20} />
+                <Typography>Loading workspace...</Typography>
+              </Stack>
+            ) : null}
+
+            {!isWorkspaceLoading && workspaceError ? (
+              <Alert severity="error">{workspaceError}</Alert>
+            ) : null}
+
+            {!isWorkspaceLoading && !workspaceError && todos.length === 0 && !isAddingTodoInline ? (
+              <Paper elevation={0} className="empty-state">
+                <Stack spacing={0.75}>
+                  <Typography variant="h6">No todos</Typography>
+                  <Typography color="text.secondary">
+                    Add an item to start using the todos app in this workspace.
+                  </Typography>
+                </Stack>
+              </Paper>
+            ) : null}
+
+            {!isWorkspaceLoading && !workspaceError && todos.length > 0 ? (
+              <Box component="ul" className="todo-list" aria-label="Todo items">
+                {todos.map((todo) => {
+                  const isUpdating = updatingTodoIds.includes(todo.id);
+                  const isDeleting = deletingTodoIds.includes(todo.id);
+                  const isMutating = isUpdating || isDeleting;
+                  const ownerLabel =
+                    todo.ownerEmail === currentUser?.email
+                      ? "Owned by you"
+                      : `Owned by ${todo.ownerEmail}`;
+
+                  return (
+                    <Paper
+                      key={todo.id}
+                      component="li"
+                      elevation={0}
+                      className={`todo-row${todo.completed ? " todo-row-done" : ""}`}
+                      sx={{ opacity: isMutating ? 0.7 : 1 }}
+                    >
+                      <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        spacing={1.5}
+                        sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}
+                      >
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography
+                            variant="subtitle1"
+                            className={todo.completed ? "todo-title-done" : undefined}
+                          >
+                            {todo.title}
+                          </Typography>
+                          <Typography color="text.secondary">{ownerLabel}</Typography>
+                        </Box>
+
+                        <Stack direction="row" spacing={1} className="todo-actions">
+                          <Button
+                            variant={todo.completed ? "outlined" : "contained"}
+                            color={todo.completed ? "inherit" : "success"}
+                            disabled={isMutating}
+                            onClick={() => void handleToggleTodo(todo)}
+                          >
+                            {isUpdating
+                              ? "Saving..."
+                              : todo.completed
+                              ? "Reopen"
+                              : "Mark done"}
+                          </Button>
+                          <Button
+                            variant="text"
+                            color="error"
+                            disabled={isMutating}
+                            onClick={() => void handleDeleteTodo(todo)}
+                            startIcon={
+                              isDeleting ? (
+                                <CircularProgress size={16} color="inherit" />
+                              ) : (
+                                <DeleteOutlineRoundedIcon />
+                              )
+                            }
+                          >
+                            {isDeleting ? "Deleting..." : "Delete"}
+                          </Button>
+                        </Stack>
+                      </Stack>
+                    </Paper>
+                  );
+                })}
+              </Box>
+            ) : null}
+          </Stack>
+        </Paper>
+      </Stack>
+    );
+  }
+
+  function renderSettingsView() {
+    if (!currentWorkspace) {
+      return (
+        <Paper
+          elevation={0}
+          className="soft-panel workspace-panel"
+          sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
+        >
+          <Typography color="text.secondary">Select a workspace to view settings.</Typography>
+        </Paper>
+      );
+    }
+
+    return (
+      <Paper
+        elevation={0}
+        className="soft-panel workspace-panel"
+        sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
+      >
+        <Stack spacing={3}>
+          <Button
+            variant="text"
+            color="inherit"
+            startIcon={<ArrowBackRoundedIcon />}
+            onClick={() => setViewMode("workspace")}
+            sx={{ alignSelf: "flex-start" }}
+          >
+            Back
+          </Button>
+
+          <Box>
+            <Typography variant="h5">Workspace settings</Typography>
+            <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+              {formatWorkspaceLabel(currentWorkspace)}
+            </Typography>
+          </Box>
+
+          <Stack spacing={1.5}>
+            <Box>
+              <Typography variant="overline" color="text.secondary">
+                Name
+              </Typography>
+              <Typography>{currentWorkspace.name}</Typography>
+            </Box>
+            <Box>
+              <Typography variant="overline" color="text.secondary">
+                Description
+              </Typography>
+              <Typography>{currentWorkspace.description || "No description."}</Typography>
+            </Box>
+            <Box>
+              <Typography variant="overline" color="text.secondary">
+                Owner
+              </Typography>
+              <Typography>{currentWorkspace.ownerEmail}</Typography>
+            </Box>
+            <Box>
+              <Typography variant="overline" color="text.secondary">
+                Access
+              </Typography>
+              <Typography>{currentWorkspace.role}</Typography>
+            </Box>
+          </Stack>
+
+          <Paper elevation={0} className="danger-panel">
+            <Stack spacing={1.5}>
+              <Typography variant="h6">Delete workspace</Typography>
+              <Typography color="text.secondary">
+                This removes the workspace, its collaborators, and all todos inside it.
+              </Typography>
+              {canManageCurrentWorkspace ? (
+                <Button
+                  variant="contained"
+                  color="error"
+                  disabled={deletingWorkspaceId === currentWorkspace.id}
+                  onClick={() => void handleDeleteWorkspace()}
+                  startIcon={
+                    deletingWorkspaceId === currentWorkspace.id ? (
+                      <CircularProgress size={18} color="inherit" />
+                    ) : (
+                      <DeleteOutlineRoundedIcon />
+                    )
+                  }
+                  sx={{ alignSelf: "flex-start" }}
+                >
+                  {deletingWorkspaceId === currentWorkspace.id
+                    ? "Deleting..."
+                    : "Delete workspace"}
+                </Button>
+              ) : (
+                <Typography color="text.secondary">
+                  Only the owner can delete this workspace.
+                </Typography>
+              )}
+            </Stack>
+          </Paper>
+        </Stack>
+      </Paper>
+    );
+  }
+
   if (isInitializing) {
     return renderAuthShell(
-      "Loading the workspace",
-      "Checking for an existing session before the UI decides which flow to show.",
+      "Loading",
+      "Checking for an existing session.",
       <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
         <CircularProgress size={20} />
-        <Typography>Loading session…</Typography>
+        <Typography>Loading session...</Typography>
       </Stack>,
       sessionError ? <Alert severity="error">{sessionError}</Alert> : undefined,
     );
@@ -798,16 +1275,9 @@ export function App() {
 
   if (!isAuthenticated) {
     return renderAuthShell(
-      "Log in to your queue",
-      "Every workspace is private until it is explicitly shared. Use the credentials provisioned for your account.",
+      "Sign in",
+      "Use the credentials provisioned for your account.",
       <Stack spacing={3}>
-        <Stack spacing={1}>
-          <Typography className="section-kicker">
-            <PersonRoundedIcon sx={{ fontSize: 16 }} />
-            Sign in
-          </Typography>
-          <Typography variant="h4">Workspace login</Typography>
-        </Stack>
         {googleLoginEnabled && googleLoginURL ? (
           <Stack spacing={1.5}>
             <Button
@@ -820,18 +1290,12 @@ export function App() {
               Continue with Google
             </Button>
             <Typography color="text.secondary" variant="body2">
-              Google login succeeds only when the verified Google account is a Gmail address
-              that exactly matches an existing user in this app.
-            </Typography>
-            <Typography
-              variant="overline"
-              color="text.secondary"
-              sx={{ letterSpacing: "0.22em" }}
-            >
-              or use the provisioned password
+              Google login works only when the verified Google account exactly matches an
+              existing user in this app.
             </Typography>
           </Stack>
         ) : null}
+
         <Box component="form" onSubmit={handleLogin}>
           <Stack spacing={2}>
             <TextField
@@ -866,10 +1330,11 @@ export function App() {
               }
               sx={{ alignSelf: "flex-start" }}
             >
-              {isSubmittingLogin ? "Logging in…" : "Log in"}
+              {isSubmittingLogin ? "Logging in..." : "Log in"}
             </Button>
           </Stack>
         </Box>
+
         {loginError ? <Alert severity="error">{loginError}</Alert> : null}
       </Stack>,
       sessionError ? <Alert severity="error">{sessionError}</Alert> : undefined,
@@ -878,19 +1343,11 @@ export function App() {
 
   if (requiresPasswordReset) {
     return renderAuthShell(
-      "Choose a password to finish setup",
-      "The account is authenticated, but the workspace stays locked until a permanent password is set.",
+      "Set password",
+      "Finish setup before using workspace apps.",
       <Stack spacing={3}>
-        <Stack spacing={1}>
-          <Typography className="section-kicker">
-            <VpnKeyRoundedIcon sx={{ fontSize: 16 }} />
-            Account setup
-          </Typography>
-          <Typography variant="h4">{currentUser?.email}</Typography>
-          <Typography color="text.secondary">
-            This works the same whether you arrived with Google login or the temporary password.
-          </Typography>
-        </Stack>
+        <Typography>{currentUser?.email}</Typography>
+
         <Box component="form" onSubmit={handlePasswordReset}>
           <Stack spacing={2}>
             <TextField
@@ -917,7 +1374,7 @@ export function App() {
                   )
                 }
               >
-                {isSubmittingPasswordReset ? "Saving…" : "Save password"}
+                {isSubmittingPasswordReset ? "Saving..." : "Save password"}
               </Button>
               <Button
                 type="button"
@@ -931,47 +1388,74 @@ export function App() {
             </Stack>
           </Stack>
         </Box>
+
         {resetError ? <Alert severity="error">{resetError}</Alert> : null}
       </Stack>,
     );
   }
 
   return (
-    <Box component="main" className="app-shell" sx={{ py: { xs: 4, md: 6 } }}>
+    <Box component="main" className="app-shell" sx={{ py: { xs: 3, md: 4 } }}>
       <Container maxWidth="lg">
-        <Stack spacing={{ xs: 2.5, md: 3 }}>
+        <Stack spacing={2.5}>
           <Paper
             elevation={0}
-            className="hero-panel"
-            sx={{ p: { xs: 3, md: 4.5 }, borderRadius: { xs: "30px", md: "38px" } }}
+            className="page-header"
+            sx={{ p: { xs: 2, md: 2.5 }, borderRadius: { xs: "18px", md: "22px" } }}
           >
-            <Stack spacing={{ xs: 3, md: 4 }} sx={{ position: "relative", zIndex: 1 }}>
+            <Stack
+              direction={{ xs: "column", lg: "row" }}
+              spacing={2}
+              sx={{ justifyContent: "space-between", alignItems: { lg: "center" } }}
+            >
+              <Box>
+                <Typography variant="h5">Workspaces</Typography>
+                <Typography color="text.secondary">{currentUser?.email}</Typography>
+              </Box>
+
               <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={1.5}
-                sx={{
-                  justifyContent: "space-between",
-                  alignItems: { xs: "flex-start", md: "center" },
-                }}
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                sx={{ alignItems: { sm: "center" }, width: { xs: "100%", lg: "auto" } }}
               >
-                <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
-                  <Chip
-                    icon={<PersonRoundedIcon />}
-                    label={`Signed in as ${currentUser?.email}`}
-                    sx={{
-                      bgcolor: alpha("#16423c", 0.08),
-                      color: "text.primary",
-                    }}
-                  />
-                  <Chip
-                    icon={<ShareRoundedIcon />}
-                    label={`${accessibleWorkspaces.length} accessible workspace${accessibleWorkspaces.length === 1 ? "" : "s"}`}
-                    sx={{
-                      bgcolor: alpha("#f05d3f", 0.12),
-                      color: "text.primary",
-                    }}
-                  />
-                </Stack>
+                <FormControl size="small" className="workspace-select">
+                  <InputLabel id="workspace-select-label">Workspace</InputLabel>
+                  <Select
+                    labelId="workspace-select-label"
+                    value={selectedWorkspace}
+                    label="Workspace"
+                    onChange={handleWorkspaceSelection}
+                    displayEmpty
+                    renderValue={() =>
+                      currentWorkspace ? formatWorkspaceLabel(currentWorkspace) : "Select workspace"
+                    }
+                  >
+                    {accessibleWorkspaces.map((workspace) => (
+                      <MenuItem key={workspace.id} value={workspace.id}>
+                        {formatWorkspaceLabel(workspace)}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <IconButton
+                  color="primary"
+                  aria-label="Create workspace"
+                  onClick={openCreateWorkspaceDialog}
+                >
+                  <AddRoundedIcon />
+                </IconButton>
+
+                <Button
+                  variant={viewMode === "settings" ? "contained" : "outlined"}
+                  color="inherit"
+                  startIcon={<SettingsRoundedIcon />}
+                  disabled={!currentWorkspace}
+                  onClick={() => setViewMode(viewMode === "settings" ? "workspace" : "settings")}
+                >
+                  {viewMode === "settings" ? "Back to workspace" : "Workspace settings"}
+                </Button>
+
                 <Button
                   variant="outlined"
                   color="inherit"
@@ -981,678 +1465,60 @@ export function App() {
                   Log out
                 </Button>
               </Stack>
-
-              <Box className="hero-grid">
-                <Stack spacing={4}>
-                  <Stack spacing={2}>
-                    <Typography className="section-kicker">
-                      <BoltRoundedIcon sx={{ fontSize: 16 }} />
-                      Shared todo workspaces
-                    </Typography>
-                    <Typography id="todo-heading" variant="h1">
-                      Named queues, explicit owners
-                    </Typography>
-                    <Typography variant="h5" sx={{ maxWidth: 700, color: "text.secondary" }}>
-                      Create dedicated workspaces, describe what they are for, and keep ownership
-                      obvious while collaborators work inside the same queue.
-                    </Typography>
-                  </Stack>
-
-                  <Stack spacing={1.5}>
-                    <Typography variant="overline" color="text.secondary">
-                      Accessible workspaces
-                    </Typography>
-                    <Box className="workspace-chip-group" role="tablist" aria-label="Workspaces">
-                      {accessibleWorkspaces.length === 0 ? (
-                        <Typography color="text.secondary">
-                          No workspaces yet. Create one below to get started.
-                        </Typography>
-                      ) : (
-                        accessibleWorkspaces.map((workspace) => {
-                          const isSelected = workspace.id === selectedWorkspace;
-
-                          return (
-                            <Chip
-                              key={workspace.id}
-                              label={workspace.name}
-                              color={isSelected ? "primary" : "default"}
-                              variant={isSelected ? "filled" : "outlined"}
-                              onClick={() => setSelectedWorkspace(workspace.id)}
-                              role="tab"
-                              aria-selected={isSelected}
-                            />
-                          );
-                        })
-                      )}
-                    </Box>
-                  </Stack>
-
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        sm: "repeat(3, minmax(0, 1fr))",
-                      },
-                      gap: 2,
-                    }}
-                  >
-                    <Card elevation={0} className="metric-card">
-                      <CardContent sx={{ p: 2.5 }}>
-                        <Stack spacing={1.25}>
-                          <TaskAltRoundedIcon color="primary" />
-                          <Typography variant="overline" color="text.secondary">
-                            Queue size
-                          </Typography>
-                          <Typography variant="h3">{todos.length}</Typography>
-                          <Typography color="text.secondary">
-                            Total tasks in the selected workspace.
-                          </Typography>
-                        </Stack>
-                      </CardContent>
-                    </Card>
-
-                    <Card elevation={0} className="metric-card">
-                      <CardContent sx={{ p: 2.5 }}>
-                        <Stack spacing={1.25}>
-                          <RocketLaunchRoundedIcon sx={{ color: "secondary.main" }} />
-                          <Typography variant="overline" color="text.secondary">
-                            Items remaining
-                          </Typography>
-                          <Typography variant="h3">{remainingCount}</Typography>
-                          <Typography color="text.secondary">
-                            Work still open in this queue.
-                          </Typography>
-                        </Stack>
-                      </CardContent>
-                    </Card>
-
-                    <Card elevation={0} className="metric-card">
-                      <CardContent sx={{ p: 2.5 }}>
-                        <Stack spacing={1.25}>
-                          <CheckCircleRoundedIcon color="success" />
-                          <Typography variant="overline" color="text.secondary">
-                            Completion rate
-                          </Typography>
-                          <Typography variant="h3">{completionRatio}%</Typography>
-                          <Typography color="text.secondary">
-                            Closed items as a share of the full workspace queue.
-                          </Typography>
-                        </Stack>
-                      </CardContent>
-                    </Card>
-                  </Box>
-                </Stack>
-
-                <Box className="spotlight-panel">
-                  <Stack spacing={2.5}>
-                    <Stack spacing={1}>
-                      <Typography variant="overline" sx={{ color: alpha("#fff6ef", 0.72) }}>
-                        Selected workspace
-                      </Typography>
-                      <Typography variant="h4">{currentWorkspace?.name ?? "No workspace selected"}</Typography>
-                      <Typography sx={{ color: alpha("#fff6ef", 0.72) }}>
-                        {currentWorkspace?.description
-                          ? currentWorkspace.description
-                          : focusTodo
-                          ? `Priority now: ${focusTodo}`
-                          : "Create a workspace or switch queues to pick something up."}
-                      </Typography>
-                      <Typography sx={{ color: alpha("#fff6ef", 0.72) }}>
-                        {currentWorkspace
-                          ? `Owned by ${currentWorkspace.ownerEmail}`
-                          : "Workspace details appear here once one is selected."}
-                      </Typography>
-                    </Stack>
-
-                    <Box>
-                      <Stack
-                        direction="row"
-                        sx={{ mb: 1, justifyContent: "space-between", alignItems: "center" }}
-                      >
-                        <Typography variant="subtitle1">Queue progress</Typography>
-                        <Typography variant="subtitle1">{completionRatio}%</Typography>
-                      </Stack>
-                      <LinearProgress
-                        variant="determinate"
-                        value={completionRatio}
-                        sx={{
-                          height: 10,
-                          borderRadius: 999,
-                          bgcolor: alpha("#ffffff", 0.16),
-                          "& .MuiLinearProgress-bar": {
-                            borderRadius: 999,
-                            bgcolor: "secondary.main",
-                          },
-                        }}
-                      />
-                    </Box>
-
-                    <Box className="surface-chips">
-                      <Chip
-                        icon={<PersonRoundedIcon sx={{ fontSize: 16 }} />}
-                        label={
-                          currentWorkspace
-                            ? currentWorkspace.role === "owner"
-                              ? "Owner access"
-                              : "Collaborator access"
-                            : "No workspace selected"
-                        }
-                        sx={{
-                          bgcolor: alpha("#ffffff", 0.12),
-                          color: "#fff8f2",
-                        }}
-                      />
-                      <Chip
-                        icon={<ShareRoundedIcon sx={{ fontSize: 16 }} />}
-                        label={`${accessibleWorkspaces.filter((workspace) => workspace.role === "owner").length} owned`}
-                        sx={{
-                          bgcolor: alpha("#ffffff", 0.12),
-                          color: "#fff8f2",
-                        }}
-                      />
-                      <Chip
-                        icon={<GroupRoundedIcon sx={{ fontSize: 16 }} />}
-                        label={`${collaboratorEmails.length} collaborator${collaboratorEmails.length === 1 ? "" : "s"}`}
-                        sx={{
-                          bgcolor: alpha("#ffffff", 0.12),
-                          color: "#fff8f2",
-                        }}
-                      />
-                      <Chip
-                        icon={<CircleRoundedIcon sx={{ fontSize: 12 }} />}
-                        label={`${remainingCount} open`}
-                        sx={{
-                          bgcolor: alpha("#ffffff", 0.12),
-                          color: "#fff8f2",
-                        }}
-                      />
-                    </Box>
-                  </Stack>
-                </Box>
-              </Box>
             </Stack>
           </Paper>
 
-          <Box className="utility-grid">
-            <Paper
-              elevation={0}
-              className="soft-panel share-panel"
-              sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "28px", md: "34px" } }}
-            >
-              <Stack spacing={3}>
-                <Stack spacing={1}>
-                  <Typography className="section-kicker">
-                    <GroupRoundedIcon sx={{ fontSize: 16 }} />
-                    Workspace management
-                  </Typography>
-                  <Typography variant="h4">Create or retire queues</Typography>
-                  <Typography color="text.secondary">
-                    Only owners can delete workspaces. Descriptions help everyone understand what a
-                    queue is for before they open it.
-                  </Typography>
-                </Stack>
+          {workspaceManageError ? <Alert severity="error">{workspaceManageError}</Alert> : null}
+          {workspaceSuccess ? <Alert severity="success">{workspaceSuccess}</Alert> : null}
 
-                <Box component="form" onSubmit={handleCreateWorkspace} aria-label="Create a workspace">
-                  <Stack spacing={1.5}>
-                    <TextField
-                      label="Workspace name"
-                      value={workspaceName}
-                      onChange={(event) => setWorkspaceName(event.target.value)}
-                      disabled={isSubmittingWorkspace}
-                      fullWidth
-                    />
-                    <TextField
-                      label="Description"
-                      value={workspaceDescription}
-                      onChange={(event) => setWorkspaceDescription(event.target.value)}
-                      disabled={isSubmittingWorkspace}
-                      multiline
-                      minRows={3}
-                      fullWidth
-                    />
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      color="secondary"
-                      disabled={isSubmittingWorkspace}
-                      startIcon={
-                        isSubmittingWorkspace ? (
-                          <CircularProgress size={18} color="inherit" />
-                        ) : (
-                          <AddRoundedIcon />
-                        )
-                      }
-                      sx={{ alignSelf: "flex-start" }}
-                    >
-                      {isSubmittingWorkspace ? "Creating…" : "Create workspace"}
-                    </Button>
-                  </Stack>
-                </Box>
-
-                <Stack spacing={1.25}>
-                  <Typography variant="overline" color="text.secondary">
-                    Current workspace
-                  </Typography>
-                  {currentWorkspace ? (
-                    <Stack spacing={1.25}>
-                      <Typography variant="h6">{currentWorkspace.name}</Typography>
-                      <Typography color="text.secondary">
-                        {currentWorkspace.description || "No description yet."}
-                      </Typography>
-                      <Typography color="text.secondary">
-                        Owner: {currentWorkspace.ownerEmail}
-                      </Typography>
-                      {canManageCurrentWorkspace ? (
-                        <Button
-                          variant="outlined"
-                          color="error"
-                          disabled={deletingWorkspaceId === currentWorkspace.id}
-                          onClick={() => void handleDeleteWorkspace(currentWorkspace)}
-                          startIcon={
-                            deletingWorkspaceId === currentWorkspace.id ? (
-                              <CircularProgress size={18} color="inherit" />
-                            ) : (
-                              <DeleteOutlineRoundedIcon />
-                            )
-                          }
-                          sx={{ alignSelf: "flex-start" }}
-                        >
-                          {deletingWorkspaceId === currentWorkspace.id
-                            ? "Deleting…"
-                            : "Delete workspace"}
-                        </Button>
-                      ) : (
-                        <Typography color="text.secondary">
-                          Only the owner can delete this workspace.
-                        </Typography>
-                      )}
-                    </Stack>
-                  ) : (
-                    <Typography color="text.secondary">
-                      No workspace selected yet. Create one above to get started.
-                    </Typography>
-                  )}
-                </Stack>
-
-                {workspaceManageError ? <Alert severity="error">{workspaceManageError}</Alert> : null}
-                {workspaceSuccess ? <Alert severity="success">{workspaceSuccess}</Alert> : null}
-              </Stack>
-            </Paper>
-
-            <Paper
-              elevation={0}
-              className="soft-panel composer-panel"
-              sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "28px", md: "34px" } }}
-            >
-              <Stack spacing={3}>
-                <Stack spacing={1}>
-                  <Typography className="section-kicker">
-                    <AddRoundedIcon sx={{ fontSize: 16 }} />
-                    Capture new work
-                  </Typography>
-                  <Typography variant="h4">Add the next move</Typography>
-                  <Typography color="text.secondary">
-                    New items land inside <strong>{currentWorkspace?.name ?? "the selected workspace"}</strong> and
-                    stay owned by the user who creates them.
-                  </Typography>
-                </Stack>
-
-                <Box component="form" onSubmit={handleSubmitTodo} aria-label="Create a todo">
-                  <Stack
-                    direction={{ xs: "column", md: "row" }}
-                    spacing={1.5}
-                    sx={{ alignItems: { md: "flex-start" } }}
-                  >
-                    <TextField
-                      id="todo-title"
-                      name="title"
-                      label="New todo"
-                      value={todoTitle}
-                      onChange={(event) => setTodoTitle(event.target.value)}
-                      placeholder="What needs doing?"
-                      disabled={isSubmittingTodo}
-                      fullWidth
-                      autoComplete="off"
-                      helperText="Press Enter or use the button to drop it into the active workspace."
-                    />
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      color="primary"
-                      disabled={isSubmittingTodo || selectedWorkspace === ""}
-                      startIcon={
-                        isSubmittingTodo ? (
-                          <CircularProgress size={18} color="inherit" />
-                        ) : (
-                          <AddRoundedIcon />
-                        )
-                      }
-                      sx={{
-                        minWidth: { md: 154 },
-                        mt: { md: "4px" },
-                        alignSelf: "flex-start",
-                      }}
-                    >
-                      {isSubmittingTodo ? "Adding…" : "Add todo"}
-                    </Button>
-                  </Stack>
-                </Box>
-
-                {todoError ? <Alert severity="error">{todoError}</Alert> : null}
-              </Stack>
-            </Paper>
-
-            <Paper
-              elevation={0}
-              className="soft-panel share-panel"
-              sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "28px", md: "34px" } }}
-            >
-              <Stack spacing={3}>
-                <Stack spacing={1}>
-                  <Typography className="section-kicker">
-                    <ShareRoundedIcon sx={{ fontSize: 16 }} />
-                    Workspace sharing
-                  </Typography>
-                  <Typography variant="h4">Invite collaborators</Typography>
-                  <Typography color="text.secondary">
-                    Everyone added here can see, edit, and re-share <strong>{currentWorkspace?.name ?? "the current workspace"}</strong>.
-                  </Typography>
-                </Stack>
-
-                <Box component="form" onSubmit={handleShareWorkspace}>
-                  <Stack spacing={1.5}>
-                    <TextField
-                      label="Collaborator email"
-                      type="email"
-                      value={shareEmail}
-                      onChange={(event) => setShareEmail(event.target.value)}
-                      autoComplete="email"
-                      disabled={isSubmittingShare}
-                      fullWidth
-                    />
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      color="secondary"
-                      disabled={isSubmittingShare || selectedWorkspace === ""}
-                      startIcon={
-                        isSubmittingShare ? (
-                          <CircularProgress size={18} color="inherit" />
-                        ) : (
-                          <ShareRoundedIcon />
-                        )
-                      }
-                      sx={{ alignSelf: "flex-start" }}
-                    >
-                      {isSubmittingShare ? "Sharing…" : "Share workspace"}
-                    </Button>
-                  </Stack>
-                </Box>
-
-                <Stack spacing={1.25}>
-                  <Typography variant="overline" color="text.secondary">
-                    Current collaborators
-                  </Typography>
-                  <Box className="subtle-list">
-                    {currentWorkspace ? (
-                      <Chip
-                        icon={<PersonRoundedIcon />}
-                        label={`${currentWorkspace.ownerEmail} · owner`}
-                        sx={{
-                          bgcolor: alpha("#16423c", 0.08),
-                          color: "text.primary",
-                        }}
-                      />
-                    ) : null}
-                    {!currentWorkspace ? (
-                      <Typography color="text.secondary">
-                        Select or create a workspace before inviting collaborators.
-                      </Typography>
-                    ) : collaboratorEmails.length === 0 ? (
-                      <Typography color="text.secondary">
-                        No collaborators yet. Add someone above to share the queue.
-                      </Typography>
-                    ) : (
-                      collaboratorEmails.map((email) => (
-                        <Chip
-                          key={email}
-                          icon={<GroupRoundedIcon />}
-                          label={email}
-                          sx={{
-                            bgcolor: alpha("#f05d3f", 0.08),
-                            color: "text.primary",
-                          }}
-                        />
-                      ))
-                    )}
-                  </Box>
-                </Stack>
-
-                {shareError ? <Alert severity="error">{shareError}</Alert> : null}
-                {shareSuccess ? <Alert severity="success">{shareSuccess}</Alert> : null}
-              </Stack>
-            </Paper>
-          </Box>
-
-          <Paper
-            elevation={0}
-            className="soft-panel todo-surface"
-            sx={{ p: { xs: 3, md: 4 }, borderRadius: { xs: "30px", md: "38px" } }}
-          >
-            <Stack spacing={3} sx={{ position: "relative", zIndex: 1 }}>
-              <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={2}
-                sx={{
-                  justifyContent: "space-between",
-                  alignItems: { xs: "flex-start", md: "flex-end" },
-                }}
-              >
-                <Box>
-                  <Typography className="section-kicker">
-                    <TaskAltRoundedIcon sx={{ fontSize: 16 }} />
-                    Workspace queue
-                  </Typography>
-                  <Typography variant="h3" sx={{ mt: 1 }}>
-                    {currentWorkspace?.name ?? "No workspace selected"}
-                  </Typography>
-                  <Typography color="text.secondary" sx={{ mt: 1 }}>
-                    {currentWorkspace?.description || "Choose a workspace to see its queue."}
-                  </Typography>
-                </Box>
-                <Box className="surface-chips">
-                  <Chip
-                    icon={<RocketLaunchRoundedIcon />}
-                    label={`Open queue · ${remainingCount}`}
-                    sx={{
-                      bgcolor: alpha("#16423c", 0.08),
-                      color: "text.primary",
-                    }}
-                  />
-                  <Chip
-                    icon={<CheckCircleRoundedIcon />}
-                    label={`Completed · ${completedCount}`}
-                    sx={{
-                      bgcolor: alpha("#2d7f5e", 0.1),
-                      color: "text.primary",
-                    }}
-                  />
-                </Box>
-              </Stack>
-
-              {workspaceError ? <Alert severity="error">{workspaceError}</Alert> : null}
-
-              {isWorkspaceLoading ? (
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-                  <CircularProgress size={20} />
-                  <Typography>Loading workspace…</Typography>
-                </Stack>
-              ) : null}
-
-              {!isWorkspaceLoading && !workspaceError ? (
-                <>
-                  <Typography color="text.secondary">{remainingCount} items remaining</Typography>
-
-                  {todos.length === 0 ? (
-                    <Paper
-                      elevation={0}
-                      className="empty-state"
-                      sx={{ p: { xs: 3, md: 4 }, borderRadius: { xs: "24px", md: "28px" } }}
-                    >
-                      <Stack spacing={1.5} sx={{ alignItems: "flex-start" }}>
-                        <Chip
-                          icon={<AutoAwesomeRoundedIcon />}
-                          label="Fresh canvas"
-                          sx={{
-                            bgcolor: alpha("#f05d3f", 0.1),
-                            color: "text.primary",
-                          }}
-                        />
-                        <Typography variant="h5">
-                          No todos in this workspace yet. Add the first item above.
-                        </Typography>
-                        <Typography color="text.secondary">
-                          Ownership is assigned automatically when the task is created.
-                        </Typography>
-                      </Stack>
-                    </Paper>
-                  ) : (
-                    <Box component="ul" className="todo-list" aria-label="Todo items">
-                      {todos.map((todo, index) => {
-                        const isComplete = todo.completed;
-                        const isUpdating = updatingTodoIds.includes(todo.id);
-                        const isDeleting = deletingTodoIds.includes(todo.id);
-                        const isMutating = isUpdating || isDeleting;
-                        const ownerLabel =
-                          todo.ownerEmail === currentUser?.email
-                            ? "Owned by you"
-                            : `Owned by ${todo.ownerEmail}`;
-
-                        return (
-                          <Card
-                            key={todo.id}
-                            component="li"
-                            elevation={0}
-                            className="todo-card"
-                            sx={{
-                              listStyle: "none",
-                              border: "1px solid",
-                              borderColor: alpha("#14221d", isComplete ? 0.08 : 0.1),
-                              bgcolor: isComplete
-                                ? alpha("#2d7f5e", 0.08)
-                                : alpha("#ffffff", 0.68),
-                              opacity: isMutating ? 0.78 : 1,
-                            }}
-                          >
-                            <CardContent sx={{ p: { xs: 2.25, md: 2.75 } }}>
-                              <Stack
-                                direction={{ xs: "column", md: "row" }}
-                                spacing={2}
-                                sx={{
-                                  justifyContent: "space-between",
-                                  alignItems: { xs: "flex-start", md: "center" },
-                                }}
-                              >
-                                <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-                                  <Box
-                                    className={`todo-index${isComplete ? " todo-index-done" : ""}`}
-                                  >
-                                    {String(index + 1).padStart(2, "0")}
-                                  </Box>
-                                  <Box sx={{ minWidth: 0 }}>
-                                    <Typography
-                                      variant="h5"
-                                      className={isComplete ? "todo-title-done" : undefined}
-                                    >
-                                      {todo.title}
-                                    </Typography>
-                                    <Stack
-                                      direction={{ xs: "column", sm: "row" }}
-                                      spacing={{ xs: 0.25, sm: 1 }}
-                                      className="todo-meta"
-                                    >
-                                      <Typography color="text.secondary">
-                                        {isComplete
-                                          ? "Completed and ready to archive mentally."
-                                          : "Open and ready for action."}
-                                      </Typography>
-                                      <Typography color="text.secondary">{ownerLabel}</Typography>
-                                    </Stack>
-                                  </Box>
-                                </Stack>
-
-                                <Stack
-                                  direction={{ xs: "column", sm: "row" }}
-                                  spacing={1}
-                                  sx={{ alignItems: { xs: "stretch", sm: "center" } }}
-                                >
-                                  <Chip
-                                    icon={
-                                      isComplete ? (
-                                        <CheckCircleRoundedIcon />
-                                      ) : (
-                                        <CircleRoundedIcon sx={{ fontSize: 14 }} />
-                                      )
-                                    }
-                                    label={isComplete ? "Completed" : "Open"}
-                                    color={isComplete ? "success" : "warning"}
-                                    variant={isComplete ? "filled" : "outlined"}
-                                  />
-                                  <Button
-                                    variant={isComplete ? "outlined" : "contained"}
-                                    color={isComplete ? "inherit" : "success"}
-                                    disabled={isMutating}
-                                    onClick={() => void handleToggleTodo(todo)}
-                                    startIcon={
-                                      isUpdating ? (
-                                        <CircularProgress size={16} color="inherit" />
-                                      ) : isComplete ? (
-                                        <CircleRoundedIcon />
-                                      ) : (
-                                        <DoneRoundedIcon />
-                                      )
-                                    }
-                                    aria-label={
-                                      isComplete
-                                        ? `Mark ${todo.title} as open`
-                                        : `Mark ${todo.title} as done`
-                                    }
-                                    sx={{ minWidth: 132 }}
-                                  >
-                                    {isUpdating ? "Saving…" : isComplete ? "Reopen" : "Mark done"}
-                                  </Button>
-                                  <Button
-                                    variant="outlined"
-                                    color="error"
-                                    disabled={isMutating}
-                                    onClick={() => void handleDeleteTodo(todo)}
-                                    startIcon={
-                                      isDeleting ? (
-                                        <CircularProgress size={16} color="inherit" />
-                                      ) : (
-                                        <DeleteOutlineRoundedIcon />
-                                      )
-                                    }
-                                    aria-label={`Delete ${todo.title}`}
-                                    sx={{ minWidth: 120 }}
-                                  >
-                                    {isDeleting ? "Deleting…" : "Delete"}
-                                  </Button>
-                                </Stack>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </Box>
-                  )}
-                </>
-              ) : null}
-            </Stack>
-          </Paper>
+          {viewMode === "settings" ? renderSettingsView() : renderWorkspaceView()}
         </Stack>
       </Container>
+
+      <Dialog open={isCreateWorkspaceDialogOpen} onClose={closeCreateWorkspaceDialog} fullWidth>
+        <Box component="form" onSubmit={handleCreateWorkspace}>
+          <DialogTitle>Create workspace</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <TextField
+                label="Workspace name"
+                value={workspaceName}
+                onChange={(event) => setWorkspaceName(event.target.value)}
+                disabled={isSubmittingWorkspace}
+                fullWidth
+              />
+              <TextField
+                label="Description"
+                value={workspaceDescription}
+                onChange={(event) => setWorkspaceDescription(event.target.value)}
+                disabled={isSubmittingWorkspace}
+                multiline
+                minRows={3}
+                fullWidth
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3 }}>
+            <Button onClick={closeCreateWorkspaceDialog} color="inherit" disabled={isSubmittingWorkspace}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmittingWorkspace}
+              startIcon={
+                isSubmittingWorkspace ? (
+                  <CircularProgress size={18} color="inherit" />
+                ) : (
+                  <AddRoundedIcon />
+                )
+              }
+            >
+              {isSubmittingWorkspace ? "Creating..." : "Create workspace"}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
     </Box>
   );
 }
