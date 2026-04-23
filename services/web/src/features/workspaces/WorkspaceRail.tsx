@@ -1,7 +1,8 @@
 import { FormEvent, MouseEvent, ReactElement } from "react";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import ChecklistRoundedIcon from "@mui/icons-material/ChecklistRounded";
-import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
@@ -223,7 +224,7 @@ export function WorkspaceRail({
               fullWidth
               variant="outlined"
               color="inherit"
-              startIcon={<CloseRoundedIcon />}
+              startIcon={<ChevronLeftRoundedIcon />}
               aria-label={selectorLabel}
               onClick={onToggleSidebar}
               className="workspace-sidebar-section-button app-selector-item"
@@ -238,11 +239,9 @@ export function WorkspaceRail({
               color="inherit"
               aria-label={selectorLabel}
               onClick={onToggleSidebar}
-              className="workspace-sidebar-icon-button workspace-sidebar-logo-button app-selector-item"
+              className="workspace-sidebar-icon-button app-selector-item"
             >
-              <Box className="workspace-sidebar-logo-tile">
-                <Box component="img" src="/logo.svg" alt="Eco" className="workspace-sidebar-logo" />
-              </Box>
+              <ChevronRightRoundedIcon />
             </AppIconButton>
           </Tooltip>
         )}

@@ -423,13 +423,6 @@
   flex-wrap: wrap;
 }
 
-.danger-panel {
-  padding: 1rem 1.125rem;
-  border-radius: var(--surface-radius);
-  border: 1px solid rgba(220, 188, 192, 0.58);
-  background: rgba(255, 247, 248, 0.82);
-}
-
 .empty-state {
   padding: 1.125rem;
   border-radius: var(--surface-radius);

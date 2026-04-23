@@ -648,15 +648,13 @@ describe("App", () => {
     expect(screen.getByRole("combobox")).toHaveTextContent("Launch Queue · owner@example.com");
 
     fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
-    expect(
-      await screen.findByRole("dialog", { name: /workspace settings/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /workspace settings/i })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^settings$/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^delete workspace$/i }));
 
     expect(await screen.findByText(/deleted launch queue/i)).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: /workspace settings/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
     expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/workspaces");
@@ -688,8 +686,9 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByAltText("Eco")).toBeInTheDocument();
-    const selectorButton = screen.getByRole("button", { name: /open workspace selector/i });
+    const selectorButton = await screen.findByRole("button", {
+      name: /open workspace selector/i,
+    });
     const createWorkspaceButton = screen.getByRole("button", { name: /create workspace/i });
     const collaboratorsButton = screen.getByRole("button", { name: /open collaborators/i });
     const settingsButton = screen.getByRole("button", { name: /open settings/i });

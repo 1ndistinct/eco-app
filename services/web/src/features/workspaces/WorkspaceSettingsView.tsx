@@ -10,6 +10,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 
 import { WorkspaceAccess } from "../../app/types";
 import { AppButton, AppIconButton } from "../../components/ui";
@@ -38,15 +39,26 @@ export function WorkspaceSettingsView({
       onClose={onClose}
       fullWidth
       maxWidth="sm"
-      aria-labelledby="workspace-settings-title"
+      aria-label="Settings"
+      aria-labelledby="workspace-settings-heading"
+      slotProps={{
+        paper: {
+          sx: {
+            backgroundColor: "#fcfdff",
+            borderColor: alpha("#dbe4ed", 0.96),
+            boxShadow: "0 24px 64px rgba(27, 39, 51, 0.16)",
+            backdropFilter: "none",
+          },
+        },
+      }}
     >
       <DialogTitle
-        id="workspace-settings-title"
+        component="div"
         sx={{ pb: 1, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}
       >
         <Box>
-          <Typography variant="h5" component="span">
-            Workspace settings
+          <Typography id="workspace-settings-heading" variant="h5" component="h2">
+            Settings
           </Typography>
           {currentWorkspace ? (
             <Typography color="text.secondary" sx={{ mt: 0.75 }}>
@@ -55,7 +67,7 @@ export function WorkspaceSettingsView({
           ) : null}
         </Box>
 
-        <AppIconButton aria-label="Close workspace settings" onClick={onClose}>
+        <AppIconButton aria-label="Close settings" onClick={onClose}>
           <CloseRoundedIcon />
         </AppIconButton>
       </DialogTitle>
@@ -90,7 +102,16 @@ export function WorkspaceSettingsView({
               </Box>
             </Stack>
 
-            <Paper elevation={0} className="danger-panel">
+            <Paper
+              elevation={0}
+              sx={(theme) => ({
+                p: "1rem 1.125rem",
+                borderRadius: 3,
+                border: `1px solid ${alpha(theme.palette.error.main, 0.22)}`,
+                backgroundColor: alpha(theme.palette.error.light, 0.08),
+                boxShadow: "none",
+              })}
+            >
               <Stack spacing={1.5}>
                 <Typography variant="h6">Delete workspace</Typography>
                 <Typography color="text.secondary">
@@ -109,7 +130,16 @@ export function WorkspaceSettingsView({
                         <DeleteOutlineRoundedIcon />
                       )
                     }
-                    sx={{ alignSelf: "flex-start" }}
+                    sx={(theme) => ({
+                      alignSelf: "flex-start",
+                      backgroundColor: theme.palette.error.main,
+                      borderColor: theme.palette.error.main,
+                      color: theme.palette.error.contrastText,
+                      "&:hover": {
+                        backgroundColor: theme.palette.error.dark,
+                        borderColor: theme.palette.error.dark,
+                      },
+                    })}
                   >
                     {deletingWorkspaceId === currentWorkspace.id
                       ? "Deleting..."
