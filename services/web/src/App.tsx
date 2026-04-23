@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, MouseEvent, useEffect, useMemo, useState } from "react";
 import { Alert, Box, CircularProgress, Container, Paper, Stack, Typography } from "@mui/material";
 
 import {
@@ -19,9 +19,7 @@ import {
   Todo,
   TodoListResponse,
   UNAUTHENTICATED_SESSION,
-  WorkspaceApp,
   WorkspaceAccess,
-  WorkspaceNote,
   WorkspaceShare,
 } from "./app/types";
 import { AuthShell } from "./features/auth/AuthShell";
@@ -68,27 +66,25 @@ export default function App() {
   const [isSubmittingPasswordReset, setIsSubmittingPasswordReset] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [viewMode, setViewMode] = useState<"workspace" | "settings">("workspace");
-  const [activeWorkspaceApp, setActiveWorkspaceApp] = useState<WorkspaceApp>("todos");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [shares, setShares] = useState<WorkspaceShare[]>([]);
-  const [notesByWorkspaceId, setNotesByWorkspaceId] = useState<Record<string, WorkspaceNote[]>>({});
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [shareEmail, setShareEmail] = useState("");
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareSuccess, setShareSuccess] = useState<string | null>(null);
   const [isSubmittingShare, setIsSubmittingShare] = useState(false);
+  const [collaboratorMenuAnchorEl, setCollaboratorMenuAnchorEl] = useState<HTMLElement | null>(
+    null,
+  );
+  const [removingCollaboratorEmails, setRemovingCollaboratorEmails] = useState<string[]>([]);
   const [draftTodoTitle, setDraftTodoTitle] = useState("");
   const [isAddingTodoInline, setIsAddingTodoInline] = useState(false);
   const [todoError, setTodoError] = useState<string | null>(null);
   const [isSubmittingTodo, setIsSubmittingTodo] = useState(false);
   const [updatingTodoIds, setUpdatingTodoIds] = useState<string[]>([]);
   const [deletingTodoIds, setDeletingTodoIds] = useState<string[]>([]);
-  const [draftNoteTitle, setDraftNoteTitle] = useState("");
-  const [draftNoteContent, setDraftNoteContent] = useState("");
-  const [isAddingNoteInline, setIsAddingNoteInline] = useState(false);
-  const [noteError, setNoteError] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDescription, setWorkspaceDescription] = useState("");
   const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
@@ -111,10 +107,6 @@ export default function App() {
         .filter((email) => email !== currentWorkspace?.ownerEmail)
         .sort((left, right) => left.localeCompare(right)),
     [currentWorkspace?.ownerEmail, shares],
-  );
-  const currentWorkspaceNotes = useMemo(
-    () => (currentWorkspace ? notesByWorkspaceId[currentWorkspace.id] ?? [] : []),
-    [currentWorkspace, notesByWorkspaceId],
   );
 
   const remainingCount = useMemo(
@@ -152,13 +144,10 @@ export default function App() {
     setTodoError(clearedState.todoError);
     setIsAddingTodoInline(clearedState.isAddingTodoInline);
     setDraftTodoTitle(clearedState.draftTodoTitle);
-    setNotesByWorkspaceId({});
-    setActiveWorkspaceApp("todos");
     setIsSidebarExpanded(false);
-    setDraftNoteTitle("");
-    setDraftNoteContent("");
-    setIsAddingNoteInline(false);
-    setNoteError(null);
+    setShareEmail("");
+    setCollaboratorMenuAnchorEl(null);
+    setRemovingCollaboratorEmails([]);
     setWorkspaceSuccess(null);
     setWorkspaceManageError(null);
     setDeletingWorkspaceId(null);
@@ -280,15 +269,14 @@ export default function App() {
     setSelectedWorkspaceId(workspaceId);
     setViewMode("workspace");
     setWorkspaceError(null);
+    setShareEmail("");
     setShareError(null);
     setShareSuccess(null);
+    setCollaboratorMenuAnchorEl(null);
+    setRemovingCollaboratorEmails([]);
     setTodoError(null);
-    setNoteError(null);
     setDraftTodoTitle("");
     setIsAddingTodoInline(false);
-    setDraftNoteTitle("");
-    setDraftNoteContent("");
-    setIsAddingNoteInline(false);
     setWorkspaceManageError(null);
   }
 
@@ -376,8 +364,11 @@ export default function App() {
     setResetError(null);
     setWorkspaceManageError(null);
     setWorkspaceSuccess(null);
+    setCollaboratorMenuAnchorEl(null);
+    setRemovingCollaboratorEmails([]);
     setShareError(null);
     setShareSuccess(null);
+    setShareEmail("");
     setTodoError(null);
 
     try {
@@ -477,13 +468,11 @@ export default function App() {
       setSelectedWorkspaceId(nextWorkspaces[0]?.id ?? "");
       setViewMode("workspace");
       setWorkspaceSuccess(`Deleted ${deletedWorkspace.name}.`);
+      setCollaboratorMenuAnchorEl(null);
+      setRemovingCollaboratorEmails([]);
+      setShareEmail("");
       setTodos([]);
       setShares([]);
-      setNotesByWorkspaceId((current) => {
-        const next = { ...current };
-        delete next[deletedWorkspace.id];
-        return next;
-      });
     } catch (error) {
       setWorkspaceManageError(
         error instanceof Error ? error.message : "Unable to delete workspace.",
@@ -538,6 +527,62 @@ export default function App() {
     } finally {
       setIsSubmittingShare(false);
     }
+  }
+
+  async function handleRemoveCollaborator(email: string) {
+    if (!currentWorkspace) {
+      return;
+    }
+
+    setRemovingCollaboratorEmails((current) => [...current, email]);
+    setShareError(null);
+    setShareSuccess(null);
+
+    try {
+      const response = await fetch(SHARE_ENDPOINT, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: currentWorkspace.id,
+          email,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "Unable to remove collaborator."));
+      }
+
+      setShares((current) => current.filter((share) => share.email !== email));
+      setShareSuccess(`Removed ${email}.`);
+
+      if (email === sessionState.user?.email && currentWorkspace.role === "collaborator") {
+        const nextWorkspaces = accessibleWorkspaces.filter(
+          (workspace) => workspace.id !== currentWorkspace.id,
+        );
+        setSessionState((current) => ({
+          ...current,
+          accessibleWorkspaces: nextWorkspaces,
+        }));
+        setSelectedWorkspaceId(nextWorkspaces[0]?.id ?? "");
+        setCollaboratorMenuAnchorEl(null);
+        setShares([]);
+        setTodos([]);
+      }
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : "Unable to remove collaborator.");
+    } finally {
+      setRemovingCollaboratorEmails((current) => current.filter((value) => value !== email));
+    }
+  }
+
+  function handleOpenCollaborators(event: MouseEvent<HTMLElement>) {
+    setShareError(null);
+    setShareSuccess(null);
+    setCollaboratorMenuAnchorEl(event.currentTarget);
+  }
+
+  function handleCloseCollaborators() {
+    setCollaboratorMenuAnchorEl(null);
   }
 
   async function handleSubmitTodo(event: FormEvent<HTMLFormElement>) {
@@ -629,36 +674,6 @@ export default function App() {
     }
   }
 
-  function handleSubmitNote(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!currentWorkspace) {
-      return;
-    }
-
-    const trimmedTitle = draftNoteTitle.trim();
-    const trimmedContent = draftNoteContent.trim();
-    if (trimmedTitle === "" && trimmedContent === "") {
-      setNoteError("Note title or content is required.");
-      return;
-    }
-
-    const note: WorkspaceNote = {
-      id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      title: trimmedTitle || "Untitled note",
-      content: trimmedContent,
-      workspaceId: currentWorkspace.id,
-    };
-
-    setNotesByWorkspaceId((current) => ({
-      ...current,
-      [currentWorkspace.id]: [...(current[currentWorkspace.id] ?? []), note],
-    }));
-    setDraftNoteTitle("");
-    setDraftNoteContent("");
-    setIsAddingNoteInline(false);
-    setNoteError(null);
-  }
-
   if (isBootstrapping) {
     return (
       <Box component="main" className="app-shell" sx={{ py: { xs: 4, md: 6 } }}>
@@ -730,9 +745,22 @@ export default function App() {
             selectedWorkspace={selectedWorkspaceId}
             currentWorkspace={currentWorkspace}
             collaboratorCount={collaboratorEmails.length}
+            collaboratorMenuAnchorEl={collaboratorMenuAnchorEl}
+            isCollaboratorMenuOpen={Boolean(collaboratorMenuAnchorEl)}
+            collaboratorEmails={collaboratorEmails}
+            shareEmail={shareEmail}
+            isSubmittingShare={isSubmittingShare}
+            shareError={shareError}
+            shareSuccess={shareSuccess}
+            removingCollaboratorEmails={removingCollaboratorEmails}
             viewMode={viewMode}
             onWorkspaceChange={handleWorkspaceChange}
             onOpenCreateWorkspace={openCreateWorkspaceDialog}
+            onOpenCollaborators={handleOpenCollaborators}
+            onCloseCollaborators={handleCloseCollaborators}
+            onShareEmailChange={setShareEmail}
+            onShareWorkspace={handleShareWorkspace}
+            onRemoveCollaborator={handleRemoveCollaborator}
             onToggleSettings={() =>
               setViewMode((current) => (current === "workspace" ? "settings" : "workspace"))
             }
@@ -761,20 +789,7 @@ export default function App() {
                   <WorkspaceView
                     currentWorkspace={currentWorkspace}
                     currentUserEmail={sessionState.user?.email}
-                    activeWorkspaceApp={activeWorkspaceApp}
                     isSidebarExpanded={isSidebarExpanded}
-                    collaboratorEmails={collaboratorEmails}
-                    shareEmail={shareEmail}
-                    isSubmittingShare={isSubmittingShare}
-                    shareError={shareError}
-                    shareSuccess={shareSuccess}
-                    onShareEmailChange={setShareEmail}
-                    onShareWorkspace={handleShareWorkspace}
-                    onWorkspaceAppChange={(app) => {
-                      setActiveWorkspaceApp(app);
-                      setTodoError(null);
-                      setNoteError(null);
-                    }}
                     onToggleSidebar={() => setIsSidebarExpanded((current) => !current)}
                     todos={todos}
                     remainingCount={remainingCount}
@@ -788,7 +803,6 @@ export default function App() {
                     updatingTodoIds={updatingTodoIds}
                     deletingTodoIds={deletingTodoIds}
                     onStartInlineTodo={() => {
-                      setActiveWorkspaceApp("todos");
                       setIsAddingTodoInline(true);
                       setTodoError(null);
                     }}
@@ -804,25 +818,6 @@ export default function App() {
                     }}
                     onToggleTodo={handleToggleTodo}
                     onDeleteTodo={handleDeleteTodo}
-                    notes={currentWorkspaceNotes}
-                    noteError={noteError}
-                    isAddingNoteInline={isAddingNoteInline}
-                    draftNoteTitle={draftNoteTitle}
-                    draftNoteContent={draftNoteContent}
-                    onStartInlineNote={() => {
-                      setActiveWorkspaceApp("notes");
-                      setIsAddingNoteInline(true);
-                      setNoteError(null);
-                    }}
-                    onDraftNoteTitleChange={setDraftNoteTitle}
-                    onDraftNoteContentChange={setDraftNoteContent}
-                    onSubmitNote={handleSubmitNote}
-                    onCancelInlineNote={() => {
-                      setDraftNoteTitle("");
-                      setDraftNoteContent("");
-                      setNoteError(null);
-                      setIsAddingNoteInline(false);
-                    }}
                   />
                 )}
               </Box>

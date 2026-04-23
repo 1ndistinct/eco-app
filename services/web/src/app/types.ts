@@ -6,15 +6,6 @@ export type Todo = {
   workspaceId: string;
 };
 
-export type WorkspaceApp = "todos" | "notes";
-
-export type WorkspaceNote = {
-  id: string;
-  title: string;
-  content: string;
-  workspaceId: string;
-};
-
 export type TodoListResponse = {
   items: Todo[];
   workspaceId: string;

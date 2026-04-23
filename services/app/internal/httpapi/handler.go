@@ -618,8 +618,38 @@ func (h *handler) handleShares(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusCreated, share)
+	case http.MethodDelete:
+		var req createShareRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON body"})
+			return
+		}
+
+		workspaceID, err := h.workspaceFromBody(r.Context(), req.WorkspaceID, user.Email)
+		if errors.Is(err, ErrWorkspaceAccessDenied) {
+			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+			return
+		}
+		if err := h.store.DeleteWorkspaceShare(r.Context(), user.Email, workspaceID, req.Email); err != nil {
+			if errors.Is(err, ErrWorkspaceAccessDenied) {
+				writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
+				return
+			}
+			if errors.Is(err, ErrShareTargetRequired) || errors.Is(err, ErrCannotRemoveOwner) {
+				writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
 	default:
-		w.Header().Set("Allow", "GET, POST")
+		w.Header().Set("Allow", "GET, POST, DELETE")
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
 	}
 }

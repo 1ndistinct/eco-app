@@ -361,6 +361,34 @@ func (s *memoryStore) CreateWorkspaceShare(_ context.Context, actorEmail string,
 	}, nil
 }
 
+func (s *memoryStore) DeleteWorkspaceShare(_ context.Context, actorEmail string, workspaceID string, shareWithEmail string) error {
+	normalizedActorEmail := normalizeEmail(actorEmail)
+	normalizedShareWithEmail := normalizeEmail(shareWithEmail)
+
+	if normalizedShareWithEmail == "" {
+		return ErrShareTargetRequired
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	workspace, exists := s.workspaces[workspaceID]
+	if !exists {
+		return ErrWorkspaceAccessDenied
+	}
+	if !s.hasAccessLocked(normalizedActorEmail, workspaceID) {
+		return ErrWorkspaceAccessDenied
+	}
+	if normalizedShareWithEmail == workspace.ownerEmail {
+		return ErrCannotRemoveOwner
+	}
+	if memberships := s.shares[workspaceID]; memberships != nil {
+		delete(memberships, normalizedShareWithEmail)
+	}
+
+	return nil
+}
+
 func (s *memoryStore) ListTodos(_ context.Context, actorEmail string, workspaceID string) ([]Todo, error) {
 	normalizedActorEmail := normalizeEmail(actorEmail)
 

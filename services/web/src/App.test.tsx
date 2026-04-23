@@ -363,6 +363,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Existing task")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/collaborator email/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /add item/i }));
     fireEvent.change(screen.getByLabelText(/new todo/i), {
@@ -371,6 +372,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText("Write invite flow")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: /open collaborators/i }));
     fireEvent.change(screen.getByLabelText(/collaborator email/i), {
       target: { value: "collab@example.com" },
     });
@@ -428,7 +430,7 @@ describe("App", () => {
     });
   });
 
-  it("switches to the notes app from the collapsed sidebar and adds a local note", async () => {
+  it("lists collaborators in the header dropdown and removes them without exposing owner deletion", async () => {
     fetchMock
       .mockResolvedValueOnce(
         new Response(JSON.stringify(authenticatedSession()), {
@@ -451,7 +453,7 @@ describe("App", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            items: [],
+            items: [{ workspaceId: "workspace-1", email: "collab@example.com" }],
             workspaceId: "workspace-1",
           }),
           {
@@ -459,26 +461,35 @@ describe("App", () => {
             headers: { "Content-Type": "application/json" },
           },
         ),
-      );
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: /workspaces/i });
+    expect(await screen.findByText("Personal")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /open notes app/i }));
-    expect(await screen.findByRole("button", { name: /add note/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /open collaborators/i }));
 
-    fireEvent.click(screen.getByRole("button", { name: /add note/i }));
-    fireEvent.change(screen.getByLabelText(/note title/i), {
-      target: { value: "Release notes" },
+    expect(await screen.findByText("collab@example.com")).toBeInTheDocument();
+    expect(screen.getByText("Owner")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /remove owner@example.com/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /remove collab@example.com/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("collab@example.com")).not.toBeInTheDocument();
     });
-    fireEvent.change(screen.getByLabelText(/^note$/i), {
-      target: { value: "Track deployment caveats here." },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(screen.getByText(/removed collab@example.com/i)).toBeInTheDocument();
 
-    expect(await screen.findByText("Release notes")).toBeInTheDocument();
-    expect(screen.getByText("Track deployment caveats here.")).toBeInTheDocument();
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/shares");
+    expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: "workspace-1",
+        email: "collab@example.com",
+      }),
+    });
   });
 
   it("creates a workspace from the header and deletes it from settings", async () => {

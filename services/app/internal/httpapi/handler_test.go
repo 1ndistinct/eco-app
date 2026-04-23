@@ -335,6 +335,82 @@ func TestSharedWorkspaceCollaboratorCanViewUpdateAndDeleteOwnerTodos(t *testing.
 	}
 }
 
+func TestOwnerCanRemoveWorkspaceCollaboratorButNotOwner(t *testing.T) {
+	store := newMemoryStore()
+	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
+		t.Fatalf("seed owner: %v", err)
+	}
+	if _, err := store.addUser("collab@example.com", "collab-password-123", false); err != nil {
+		t.Fatalf("seed collaborator: %v", err)
+	}
+
+	handler := NewHandler(store)
+	loginRec := login(t, handler, "owner@example.com", "owner-password-123")
+	cookie := requireSessionCookie(t, loginRec)
+	workspace := requireFirstWorkspace(t, loginRec)
+
+	createShareReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/shares",
+		strings.NewReader(`{"workspaceId":"`+workspace.ID+`","email":"collab@example.com"}`),
+	)
+	createShareReq.Header.Set("Content-Type", "application/json")
+	createShareReq.AddCookie(cookie)
+	createShareRec := httptest.NewRecorder()
+	handler.ServeHTTP(createShareRec, createShareReq)
+
+	if createShareRec.Code != http.StatusCreated {
+		t.Fatalf("unexpected share create status: %d body=%s", createShareRec.Code, createShareRec.Body.String())
+	}
+
+	deleteShareReq := httptest.NewRequest(
+		http.MethodDelete,
+		"/api/shares",
+		strings.NewReader(`{"workspaceId":"`+workspace.ID+`","email":"collab@example.com"}`),
+	)
+	deleteShareReq.Header.Set("Content-Type", "application/json")
+	deleteShareReq.AddCookie(cookie)
+	deleteShareRec := httptest.NewRecorder()
+	handler.ServeHTTP(deleteShareRec, deleteShareReq)
+
+	if deleteShareRec.Code != http.StatusNoContent {
+		t.Fatalf("unexpected share delete status: %d body=%s", deleteShareRec.Code, deleteShareRec.Body.String())
+	}
+
+	listSharesReq := httptest.NewRequest(http.MethodGet, "/api/shares?workspace="+url.QueryEscape(workspace.ID), nil)
+	listSharesReq.AddCookie(cookie)
+	listSharesRec := httptest.NewRecorder()
+	handler.ServeHTTP(listSharesRec, listSharesReq)
+
+	if listSharesRec.Code != http.StatusOK {
+		t.Fatalf("unexpected share list status: %d body=%s", listSharesRec.Code, listSharesRec.Body.String())
+	}
+	var listSharesResp shareListResponse
+	if err := json.Unmarshal(listSharesRec.Body.Bytes(), &listSharesResp); err != nil {
+		t.Fatalf("decode share list body: %v", err)
+	}
+	if listSharesResp.WorkspaceID != workspace.ID || len(listSharesResp.Items) != 0 {
+		t.Fatalf("unexpected share list body after delete: %+v", listSharesResp)
+	}
+
+	deleteOwnerReq := httptest.NewRequest(
+		http.MethodDelete,
+		"/api/shares",
+		strings.NewReader(`{"workspaceId":"`+workspace.ID+`","email":"owner@example.com"}`),
+	)
+	deleteOwnerReq.Header.Set("Content-Type", "application/json")
+	deleteOwnerReq.AddCookie(cookie)
+	deleteOwnerRec := httptest.NewRecorder()
+	handler.ServeHTTP(deleteOwnerRec, deleteOwnerReq)
+
+	if deleteOwnerRec.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected owner delete status: %d body=%s", deleteOwnerRec.Code, deleteOwnerRec.Body.String())
+	}
+	if !strings.Contains(deleteOwnerRec.Body.String(), ErrCannotRemoveOwner.Error()) {
+		t.Fatalf("expected cannot remove owner error, got %q", deleteOwnerRec.Body.String())
+	}
+}
+
 func TestOwnerCanCreateAndDeleteWorkspace(t *testing.T) {
 	store := newMemoryStore()
 	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {

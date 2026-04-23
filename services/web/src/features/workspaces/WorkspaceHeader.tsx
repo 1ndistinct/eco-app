@@ -1,3 +1,4 @@
+import { FormEvent, MouseEvent } from "react";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
@@ -19,6 +20,7 @@ import {
 } from "@mui/material";
 
 import { WorkspaceAccess } from "../../app/types";
+import { CollaboratorsPopover } from "./CollaboratorsPopover";
 import { formatWorkspaceLabel } from "./workspaceLabels";
 
 type WorkspaceHeaderProps = {
@@ -27,9 +29,22 @@ type WorkspaceHeaderProps = {
   selectedWorkspace: string;
   currentWorkspace?: WorkspaceAccess;
   collaboratorCount: number;
+  collaboratorMenuAnchorEl: HTMLElement | null;
+  isCollaboratorMenuOpen: boolean;
+  collaboratorEmails: string[];
+  shareEmail: string;
+  isSubmittingShare: boolean;
+  shareError: string | null;
+  shareSuccess: string | null;
+  removingCollaboratorEmails: string[];
   viewMode: "workspace" | "settings";
   onWorkspaceChange: (workspaceID: string) => void;
   onOpenCreateWorkspace: () => void;
+  onOpenCollaborators: (event: MouseEvent<HTMLElement>) => void;
+  onCloseCollaborators: () => void;
+  onShareEmailChange: (value: string) => void;
+  onShareWorkspace: (event: FormEvent<HTMLFormElement>) => void;
+  onRemoveCollaborator: (email: string) => void;
   onToggleSettings: () => void;
   onLogout: () => void;
 };
@@ -40,9 +55,22 @@ export function WorkspaceHeader({
   selectedWorkspace,
   currentWorkspace,
   collaboratorCount,
+  collaboratorMenuAnchorEl,
+  isCollaboratorMenuOpen,
+  collaboratorEmails,
+  shareEmail,
+  isSubmittingShare,
+  shareError,
+  shareSuccess,
+  removingCollaboratorEmails,
   viewMode,
   onWorkspaceChange,
   onOpenCreateWorkspace,
+  onOpenCollaborators,
+  onCloseCollaborators,
+  onShareEmailChange,
+  onShareWorkspace,
+  onRemoveCollaborator,
   onToggleSettings,
   onLogout,
 }: WorkspaceHeaderProps) {
@@ -75,14 +103,17 @@ export function WorkspaceHeader({
           <Tooltip
             title={`${collaboratorCount} collaborator${collaboratorCount === 1 ? "" : "s"}`}
           >
-            <Box
+            <IconButton
+              color="inherit"
               className="header-collaborators"
-              aria-label={`${collaboratorCount} collaborator${collaboratorCount === 1 ? "" : "s"}`}
+              aria-label="Open collaborators"
+              disabled={!currentWorkspace}
+              onClick={onOpenCollaborators}
             >
               <Badge badgeContent={collaboratorCount} color="secondary" showZero>
                 <GroupRoundedIcon />
               </Badge>
-            </Box>
+            </IconButton>
           </Tooltip>
 
           <FormControl size="small" className="workspace-select">
@@ -133,6 +164,23 @@ export function WorkspaceHeader({
           </Button>
         </Stack>
       </Stack>
+
+      <CollaboratorsPopover
+        anchorEl={collaboratorMenuAnchorEl}
+        open={isCollaboratorMenuOpen}
+        currentWorkspace={currentWorkspace}
+        currentUserEmail={currentUserEmail}
+        collaboratorEmails={collaboratorEmails}
+        shareEmail={shareEmail}
+        isSubmittingShare={isSubmittingShare}
+        shareError={shareError}
+        shareSuccess={shareSuccess}
+        removingCollaboratorEmails={removingCollaboratorEmails}
+        onClose={onCloseCollaborators}
+        onShareEmailChange={onShareEmailChange}
+        onShareWorkspace={onShareWorkspace}
+        onRemoveCollaborator={onRemoveCollaborator}
+      />
     </Paper>
   );
 }

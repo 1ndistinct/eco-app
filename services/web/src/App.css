@@ -78,12 +78,15 @@
 }
 
 .header-collaborators {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   min-width: 3rem;
   min-height: 3rem;
-  padding: 0.25rem;
+}
+
+.collaborator-row {
+  padding: 0.875rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(20, 34, 29, 0.08);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .workspace-panel {
@@ -216,25 +219,6 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #52615a;
-}
-
-.note-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 0.75rem;
-}
-
-.note-row {
-  padding: 1rem 1.125rem;
-  border-radius: 16px;
-  border: 1px solid rgba(20, 34, 29, 0.08);
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.note-row-editor {
-  background: rgba(240, 93, 63, 0.04);
 }
 
 @media (max-width: 900px) {

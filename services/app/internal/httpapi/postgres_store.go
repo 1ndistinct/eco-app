@@ -354,6 +354,47 @@ func (s *PostgresStore) CreateWorkspaceShare(ctx context.Context, actorEmail str
 	}, nil
 }
 
+func (s *PostgresStore) DeleteWorkspaceShare(ctx context.Context, actorEmail string, workspaceID string, shareWithEmail string) error {
+	numericWorkspaceID, err := parseWorkspaceID(workspaceID)
+	if err != nil {
+		return ErrWorkspaceAccessDenied
+	}
+
+	normalizedActorEmail := normalizeEmail(actorEmail)
+	normalizedShareWithEmail := normalizeEmail(shareWithEmail)
+	if normalizedShareWithEmail == "" {
+		return ErrShareTargetRequired
+	}
+
+	workspace, err := s.workspaceByID(ctx, numericWorkspaceID)
+	if errors.Is(err, ErrWorkspaceNotFound) {
+		return ErrWorkspaceAccessDenied
+	}
+	if err != nil {
+		return err
+	}
+	if err := s.authorizeWorkspace(ctx, normalizedActorEmail, numericWorkspaceID); err != nil {
+		return err
+	}
+	if normalizedShareWithEmail == workspace.OwnerEmail {
+		return ErrCannotRemoveOwner
+	}
+
+	query, args, err := s.builder.
+		Delete("workspace_memberships").
+		Where(sq.Eq{
+			"workspace_id": numericWorkspaceID,
+			"user_email":   normalizedShareWithEmail,
+		}).
+		ToSql()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.ExecContext(ctx, query, args...)
+	return err
+}
+
 func (s *PostgresStore) ListTodos(ctx context.Context, actorEmail string, workspaceID string) ([]Todo, error) {
 	numericWorkspaceID, err := parseWorkspaceID(workspaceID)
 	if err != nil {

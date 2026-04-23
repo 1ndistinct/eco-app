@@ -1,42 +1,23 @@
 import { FormEvent } from "react";
-import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import ChecklistRoundedIcon from "@mui/icons-material/ChecklistRounded";
-import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
 import MenuOpenRoundedIcon from "@mui/icons-material/MenuOpenRounded";
-import NotesRoundedIcon from "@mui/icons-material/NotesRounded";
-import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
-import { alpha } from "@mui/material/styles";
 import {
-  Alert,
   Box,
   Button,
-  Chip,
-  CircularProgress,
   IconButton,
   Paper,
   Stack,
-  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 
-import { Todo, WorkspaceAccess, WorkspaceApp, WorkspaceNote } from "../../app/types";
-import { NotesPanel } from "../notes/NotesPanel";
+import { Todo, WorkspaceAccess } from "../../app/types";
 import { TodosPanel } from "../todos/TodosPanel";
 
 type WorkspaceViewProps = {
   currentWorkspace?: WorkspaceAccess;
   currentUserEmail?: string;
-  activeWorkspaceApp: WorkspaceApp;
   isSidebarExpanded: boolean;
-  collaboratorEmails: string[];
-  shareEmail: string;
-  isSubmittingShare: boolean;
-  shareError: string | null;
-  shareSuccess: string | null;
-  onShareEmailChange: (value: string) => void;
-  onShareWorkspace: (event: FormEvent<HTMLFormElement>) => void;
-  onWorkspaceAppChange: (app: WorkspaceApp) => void;
   onToggleSidebar: () => void;
   todos: Todo[];
   remainingCount: number;
@@ -55,31 +36,12 @@ type WorkspaceViewProps = {
   onCancelInlineTodo: () => void;
   onToggleTodo: (todo: Todo) => void;
   onDeleteTodo: (todo: Todo) => void;
-  notes: WorkspaceNote[];
-  noteError: string | null;
-  isAddingNoteInline: boolean;
-  draftNoteTitle: string;
-  draftNoteContent: string;
-  onStartInlineNote: () => void;
-  onDraftNoteTitleChange: (value: string) => void;
-  onDraftNoteContentChange: (value: string) => void;
-  onSubmitNote: (event: FormEvent<HTMLFormElement>) => void;
-  onCancelInlineNote: () => void;
 };
 
 export function WorkspaceView({
   currentWorkspace,
   currentUserEmail,
-  activeWorkspaceApp,
   isSidebarExpanded,
-  collaboratorEmails,
-  shareEmail,
-  isSubmittingShare,
-  shareError,
-  shareSuccess,
-  onShareEmailChange,
-  onShareWorkspace,
-  onWorkspaceAppChange,
   onToggleSidebar,
   todos,
   remainingCount,
@@ -98,29 +60,15 @@ export function WorkspaceView({
   onCancelInlineTodo,
   onToggleTodo,
   onDeleteTodo,
-  notes,
-  noteError,
-  isAddingNoteInline,
-  draftNoteTitle,
-  draftNoteContent,
-  onStartInlineNote,
-  onDraftNoteTitleChange,
-  onDraftNoteContentChange,
-  onSubmitNote,
-  onCancelInlineNote,
 }: WorkspaceViewProps) {
-  function renderAppButton(app: WorkspaceApp, label: string, icon: JSX.Element) {
-    const isActive = activeWorkspaceApp === app;
-
+  function renderAppButton(label: string, icon: JSX.Element) {
     if (isSidebarExpanded) {
       return (
         <Button
-          key={app}
           fullWidth
-          variant={isActive ? "contained" : "text"}
-          color={isActive ? "primary" : "inherit"}
+          variant="contained"
+          color="primary"
           startIcon={icon}
-          onClick={() => onWorkspaceAppChange(app)}
           sx={{ justifyContent: "flex-start" }}
         >
           {label}
@@ -129,12 +77,11 @@ export function WorkspaceView({
     }
 
     return (
-      <Tooltip key={app} title={label} placement="right">
+      <Tooltip title={label} placement="right">
         <IconButton
-          color={isActive ? "primary" : "default"}
+          color="primary"
           aria-label={`Open ${label.toLowerCase()} app`}
-          onClick={() => onWorkspaceAppChange(app)}
-          className={`app-selector-icon${isActive ? " app-selector-icon-active" : ""}`}
+          className="app-selector-icon app-selector-icon-active"
         >
           {icon}
         </IconButton>
@@ -185,8 +132,7 @@ export function WorkspaceView({
           </Box>
 
           <Stack spacing={1} className="app-selector">
-            {renderAppButton("todos", "Todos", <ChecklistRoundedIcon />)}
-            {renderAppButton("notes", "Notes", <NotesRoundedIcon />)}
+            {renderAppButton("Todos", <ChecklistRoundedIcon />)}
           </Stack>
         </Stack>
       </Paper>
@@ -204,112 +150,30 @@ export function WorkspaceView({
                 {currentWorkspace.description || "No description."}
               </Typography>
             </Box>
-
-            <Box>
-              <Typography variant="h6">Collaborators</Typography>
-              <Typography color="text.secondary">
-                Everyone listed here can work inside this workspace.
-              </Typography>
-            </Box>
-
-            <Box className="chip-list">
-              <Chip
-                icon={<PersonRoundedIcon />}
-                label={`${currentWorkspace.ownerEmail} · owner`}
-                sx={{
-                  bgcolor: alpha("#16423c", 0.08),
-                  color: "text.primary",
-                }}
-              />
-              {collaboratorEmails.map((email) => (
-                <Chip
-                  key={email}
-                  icon={<GroupRoundedIcon />}
-                  label={email}
-                  sx={{
-                    bgcolor: alpha("#f05d3f", 0.08),
-                    color: "text.primary",
-                  }}
-                />
-              ))}
-            </Box>
-
-            <Box component="form" onSubmit={onShareWorkspace} aria-label="Share workspace">
-              <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={1.5}
-                sx={{ alignItems: { md: "flex-start" } }}
-              >
-                <TextField
-                  label="Collaborator email"
-                  type="email"
-                  value={shareEmail}
-                  onChange={(event) => onShareEmailChange(event.target.value)}
-                  autoComplete="email"
-                  disabled={isSubmittingShare}
-                  fullWidth
-                />
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  disabled={isSubmittingShare}
-                  startIcon={
-                    isSubmittingShare ? (
-                      <CircularProgress size={18} color="inherit" />
-                    ) : (
-                      <AddRoundedIcon />
-                    )
-                  }
-                  sx={{ minWidth: { md: 160 }, alignSelf: "flex-start" }}
-                >
-                  {isSubmittingShare ? "Adding..." : "Add collaborator"}
-                </Button>
-              </Stack>
-            </Box>
-
-            {shareError ? <Alert severity="error">{shareError}</Alert> : null}
-            {shareSuccess ? <Alert severity="success">{shareSuccess}</Alert> : null}
           </Stack>
         </Paper>
 
-        {activeWorkspaceApp === "todos" ? (
-          <TodosPanel
-            currentWorkspace={currentWorkspace}
-            currentUserEmail={currentUserEmail}
-            todos={todos}
-            remainingCount={remainingCount}
-            completedCount={completedCount}
-            isWorkspaceLoading={isWorkspaceLoading}
-            workspaceError={workspaceError}
-            todoError={todoError}
-            isAddingTodoInline={isAddingTodoInline}
-            draftTodoTitle={draftTodoTitle}
-            isSubmittingTodo={isSubmittingTodo}
-            updatingTodoIds={updatingTodoIds}
-            deletingTodoIds={deletingTodoIds}
-            onStartInlineTodo={onStartInlineTodo}
-            onDraftTodoTitleChange={onDraftTodoTitleChange}
-            onSubmitTodo={onSubmitTodo}
-            onCancelInlineTodo={onCancelInlineTodo}
-            onToggleTodo={onToggleTodo}
-            onDeleteTodo={onDeleteTodo}
-          />
-        ) : (
-          <NotesPanel
-            currentWorkspace={currentWorkspace}
-            notes={notes}
-            noteError={noteError}
-            isAddingNoteInline={isAddingNoteInline}
-            draftNoteTitle={draftNoteTitle}
-            draftNoteContent={draftNoteContent}
-            onStartInlineNote={onStartInlineNote}
-            onDraftNoteTitleChange={onDraftNoteTitleChange}
-            onDraftNoteContentChange={onDraftNoteContentChange}
-            onSubmitNote={onSubmitNote}
-            onCancelInlineNote={onCancelInlineNote}
-          />
-        )}
+        <TodosPanel
+          currentWorkspace={currentWorkspace}
+          currentUserEmail={currentUserEmail}
+          todos={todos}
+          remainingCount={remainingCount}
+          completedCount={completedCount}
+          isWorkspaceLoading={isWorkspaceLoading}
+          workspaceError={workspaceError}
+          todoError={todoError}
+          isAddingTodoInline={isAddingTodoInline}
+          draftTodoTitle={draftTodoTitle}
+          isSubmittingTodo={isSubmittingTodo}
+          updatingTodoIds={updatingTodoIds}
+          deletingTodoIds={deletingTodoIds}
+          onStartInlineTodo={onStartInlineTodo}
+          onDraftTodoTitleChange={onDraftTodoTitleChange}
+          onSubmitTodo={onSubmitTodo}
+          onCancelInlineTodo={onCancelInlineTodo}
+          onToggleTodo={onToggleTodo}
+          onDeleteTodo={onDeleteTodo}
+        />
       </Stack>
     </Box>
   );

@@ -252,6 +252,20 @@ Todos are scoped to a named workspace. Each todo keeps both:
   - caller must already have access to the workspace
   - shared user must already exist
 
+### `DELETE /api/shares`
+- request: `application/json`
+```json
+{"workspaceId":"1","email":"collab@example.com"}
+```
+- response: `204`
+- requirements:
+  - authenticated session required
+  - password reset must already be completed
+  - caller must already have access to the workspace
+- validation:
+  - `email` is required
+  - the workspace owner cannot be removed through this endpoint
+
 ## Frontend Integration Guidance
 - Treat `id` as an opaque string.
 - Use `GET /api/auth/session` as the bootstrap source of truth.

@@ -57,6 +57,7 @@ type AppStore interface {
 	DeleteWorkspace(ctx context.Context, actorEmail string, workspaceID string) error
 	ListWorkspaceShares(ctx context.Context, actorEmail string, workspaceID string) ([]WorkspaceShare, error)
 	CreateWorkspaceShare(ctx context.Context, actorEmail string, workspaceID string, shareWithEmail string) (WorkspaceShare, error)
+	DeleteWorkspaceShare(ctx context.Context, actorEmail string, workspaceID string, shareWithEmail string) error
 	ListTodos(ctx context.Context, actorEmail string, workspaceID string) ([]Todo, error)
 	CreateTodo(ctx context.Context, actorEmail string, workspaceID string, title string) (Todo, error)
 	UpdateCompleted(ctx context.Context, actorEmail string, id string, completed bool) (Todo, error)
@@ -77,5 +78,6 @@ var (
 	ErrWorkspaceNameRequired = errors.New("workspace name is required")
 	ErrShareTargetRequired   = errors.New("share email is required")
 	ErrCannotShareWithOwner  = errors.New("cannot share a workspace with its owner")
+	ErrCannotRemoveOwner     = errors.New("cannot remove the owner from a workspace")
 	ErrPasswordResetRequired = errors.New("password reset required")
 )
