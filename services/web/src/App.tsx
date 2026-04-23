@@ -35,27 +35,30 @@ type Todo = {
   title: string;
   completed: boolean;
   ownerEmail: string;
-  workspaceEmail: string;
+  workspaceId: string;
 };
 
 type TodoListResponse = {
   items: Todo[];
-  workspaceEmail: string;
+  workspaceId: string;
 };
 
 type WorkspaceAccess = {
+  id: string;
+  name: string;
+  description: string;
   ownerEmail: string;
   role: "owner" | "collaborator";
 };
 
 type WorkspaceShare = {
-  workspaceEmail: string;
+  workspaceId: string;
   email: string;
 };
 
 type ShareListResponse = {
   items: WorkspaceShare[];
-  workspaceEmail: string;
+  workspaceId: string;
 };
 
 type SessionUser = {
@@ -79,6 +82,7 @@ const SESSION_ENDPOINT = "/api/auth/session";
 const LOGIN_ENDPOINT = "/api/auth/login";
 const LOGOUT_ENDPOINT = "/api/auth/logout";
 const RESET_PASSWORD_ENDPOINT = "/api/auth/reset-password";
+const WORKSPACE_ENDPOINT = "/api/workspaces";
 const TODO_ENDPOINT = "/api/todos";
 const SHARE_ENDPOINT = "/api/shares";
 
@@ -90,6 +94,26 @@ const UNAUTHENTICATED_SESSION: SessionState = {
 };
 const EMPTY_WORKSPACES: WorkspaceAccess[] = [];
 
+function normalizeWorkspaceAccess(workspace: Partial<WorkspaceAccess>): WorkspaceAccess | null {
+  if (typeof workspace.id !== "string" || workspace.id.trim() === "") {
+    return null;
+  }
+  if (typeof workspace.ownerEmail !== "string" || workspace.ownerEmail.trim() === "") {
+    return null;
+  }
+
+  return {
+    id: workspace.id,
+    name:
+      typeof workspace.name === "string" && workspace.name.trim() !== ""
+        ? workspace.name
+        : "Untitled workspace",
+    description: typeof workspace.description === "string" ? workspace.description : "",
+    ownerEmail: workspace.ownerEmail,
+    role: workspace.role === "collaborator" ? "collaborator" : "owner",
+  };
+}
+
 function normalizeSessionState(data: Partial<SessionState>): SessionState {
   return {
     authenticated: data.authenticated === true,
@@ -98,6 +122,8 @@ function normalizeSessionState(data: Partial<SessionState>): SessionState {
     user: data.user,
     accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
       ? data.accessibleWorkspaces
+          .map((workspace) => normalizeWorkspaceAccess(workspace))
+          .filter((workspace): workspace is WorkspaceAccess => workspace !== null)
       : [],
   };
 }
@@ -145,15 +171,19 @@ export function App() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [resetNewPassword, setResetNewPassword] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [workspaceDescription, setWorkspaceDescription] = useState("");
   const [todoTitle, setTodoTitle] = useState("");
   const [shareEmail, setShareEmail] = useState("");
 
   const [isInitializing, setIsInitializing] = useState(true);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isSubmittingPasswordReset, setIsSubmittingPasswordReset] = useState(false);
+  const [isSubmittingWorkspace, setIsSubmittingWorkspace] = useState(false);
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
   const [isSubmittingTodo, setIsSubmittingTodo] = useState(false);
   const [isSubmittingShare, setIsSubmittingShare] = useState(false);
+  const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(null);
   const [updatingTodoIds, setUpdatingTodoIds] = useState<string[]>([]);
   const [deletingTodoIds, setDeletingTodoIds] = useState<string[]>([]);
 
@@ -161,6 +191,8 @@ export function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [workspaceManageError, setWorkspaceManageError] = useState<string | null>(null);
+  const [workspaceSuccess, setWorkspaceSuccess] = useState<string | null>(null);
   const [todoError, setTodoError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareSuccess, setShareSuccess] = useState<string | null>(null);
@@ -171,9 +203,8 @@ export function App() {
   const googleLoginURL = session?.googleLoginURL ?? "";
   const requiresPasswordReset = currentUser?.passwordResetRequired === true;
   const accessibleWorkspaces = session?.accessibleWorkspaces ?? EMPTY_WORKSPACES;
-  const currentWorkspace = accessibleWorkspaces.find(
-    (workspace) => workspace.ownerEmail === selectedWorkspace,
-  );
+  const currentWorkspace = accessibleWorkspaces.find((workspace) => workspace.id === selectedWorkspace);
+  const canManageCurrentWorkspace = currentWorkspace?.role === "owner";
   const collaboratorEmails = useMemo(
     () =>
       shares
@@ -247,26 +278,37 @@ export function App() {
       return;
     }
 
-    setSelectedWorkspace((currentWorkspaceEmail) => {
+    setSelectedWorkspace((currentWorkspaceId) => {
       if (
-        currentWorkspaceEmail !== "" &&
-        accessibleWorkspaces.some((workspace) => workspace.ownerEmail === currentWorkspaceEmail)
+        currentWorkspaceId !== "" &&
+        accessibleWorkspaces.some((workspace) => workspace.id === currentWorkspaceId)
       ) {
-        return currentWorkspaceEmail;
+        return currentWorkspaceId;
       }
 
-      return currentUser?.email ?? accessibleWorkspaces[0].ownerEmail;
+      return accessibleWorkspaces.find((workspace) => workspace.role === "owner")?.id ?? accessibleWorkspaces[0].id;
     });
-  }, [accessibleWorkspaces, currentUser?.email, isAuthenticated, requiresPasswordReset]);
+  }, [accessibleWorkspaces, isAuthenticated, requiresPasswordReset]);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadWorkspaceData() {
-      if (!isAuthenticated || requiresPasswordReset || selectedWorkspace === "") {
-        return;
-      }
+    if (!isAuthenticated || requiresPasswordReset) {
+      return () => {
+        isMounted = false;
+      };
+    }
 
+    if (selectedWorkspace === "") {
+      setTodos([]);
+      setShares([]);
+      setIsWorkspaceLoading(false);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    async function loadWorkspaceData() {
       setIsWorkspaceLoading(true);
       setWorkspaceError(null);
       setTodoError(null);
@@ -418,11 +460,130 @@ export function App() {
     }
     setLoginPassword("");
     setSelectedWorkspace("");
+    setWorkspaceName("");
+    setWorkspaceDescription("");
     setTodos([]);
     setShares([]);
+    setWorkspaceManageError(null);
+    setWorkspaceSuccess(null);
     setShareSuccess(null);
     setUpdatingTodoIds([]);
     setDeletingTodoIds([]);
+    setDeletingWorkspaceId(null);
+  }
+
+  async function handleCreateWorkspace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const trimmedName = workspaceName.trim();
+    if (trimmedName === "") {
+      setWorkspaceManageError("Workspace name is required.");
+      return;
+    }
+
+    setIsSubmittingWorkspace(true);
+    setWorkspaceManageError(null);
+    setWorkspaceSuccess(null);
+
+    try {
+      const response = await fetch(WORKSPACE_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: trimmedName,
+          description: workspaceDescription.trim(),
+        }),
+      });
+
+      if (response.status === 401) {
+        setSession(UNAUTHENTICATED_SESSION);
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "Unable to create the workspace."));
+      }
+
+      const createdWorkspace = normalizeWorkspaceAccess(
+        (await response.json()) as WorkspaceAccess,
+      );
+      if (!createdWorkspace) {
+        throw new Error("Workspace response was incomplete.");
+      }
+
+      setSession((currentSession) =>
+        currentSession
+          ? normalizeSessionState({
+              ...currentSession,
+              accessibleWorkspaces: [
+                ...(currentSession.accessibleWorkspaces ?? []),
+                createdWorkspace,
+              ],
+            })
+          : currentSession,
+      );
+      setSelectedWorkspace(createdWorkspace.id);
+      setWorkspaceName("");
+      setWorkspaceDescription("");
+      setWorkspaceSuccess(`Created ${createdWorkspace.name}.`);
+    } catch (error) {
+      setWorkspaceManageError(
+        error instanceof Error ? error.message : "Unable to create the workspace.",
+      );
+    } finally {
+      setIsSubmittingWorkspace(false);
+    }
+  }
+
+  async function handleDeleteWorkspace(workspace: WorkspaceAccess) {
+    const confirmed = window.confirm(
+      `Delete "${workspace.name}"? This removes its todos and collaborators.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingWorkspaceId(workspace.id);
+    setWorkspaceManageError(null);
+    setWorkspaceSuccess(null);
+
+    try {
+      const response = await fetch(`${WORKSPACE_ENDPOINT}/${workspace.id}`, {
+        method: "DELETE",
+      });
+
+      if (response.status === 401) {
+        setSession(UNAUTHENTICATED_SESSION);
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "Unable to delete the workspace."));
+      }
+
+      setSession((currentSession) =>
+        currentSession
+          ? normalizeSessionState({
+              ...currentSession,
+              accessibleWorkspaces: (currentSession.accessibleWorkspaces ?? []).filter(
+                (currentWorkspace) => currentWorkspace.id !== workspace.id,
+              ),
+            })
+          : currentSession,
+      );
+      if (selectedWorkspace === workspace.id) {
+        setSelectedWorkspace("");
+        setTodos([]);
+        setShares([]);
+      }
+      setWorkspaceSuccess(`Deleted ${workspace.name}.`);
+    } catch (error) {
+      setWorkspaceManageError(
+        error instanceof Error ? error.message : "Unable to delete the workspace.",
+      );
+    } finally {
+      setDeletingWorkspaceId(null);
+    }
   }
 
   async function handleSubmitTodo(event: FormEvent<HTMLFormElement>) {
@@ -445,7 +606,7 @@ export function App() {
         },
         body: JSON.stringify({
           title: trimmedTitle,
-          workspaceEmail: selectedWorkspace,
+          workspaceId: selectedWorkspace,
         }),
       });
 
@@ -547,7 +708,7 @@ export function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          workspaceEmail: selectedWorkspace,
+          workspaceId: selectedWorkspace,
           email: shareEmail.trim(),
         }),
       });
@@ -829,11 +990,11 @@ export function App() {
                       Shared todo workspaces
                     </Typography>
                     <Typography id="todo-heading" variant="h1">
-                      Shared queues, explicit owners
+                      Named queues, explicit owners
                     </Typography>
                     <Typography variant="h5" sx={{ maxWidth: 700, color: "text.secondary" }}>
-                      Every queue belongs to a user, every collaborator is explicit, and the
-                      current workspace stays obvious while you work inside it.
+                      Create dedicated workspaces, describe what they are for, and keep ownership
+                      obvious while collaborators work inside the same queue.
                     </Typography>
                   </Stack>
 
@@ -842,21 +1003,27 @@ export function App() {
                       Accessible workspaces
                     </Typography>
                     <Box className="workspace-chip-group" role="tablist" aria-label="Workspaces">
-                      {accessibleWorkspaces.map((workspace) => {
-                        const isSelected = workspace.ownerEmail === selectedWorkspace;
+                      {accessibleWorkspaces.length === 0 ? (
+                        <Typography color="text.secondary">
+                          No workspaces yet. Create one below to get started.
+                        </Typography>
+                      ) : (
+                        accessibleWorkspaces.map((workspace) => {
+                          const isSelected = workspace.id === selectedWorkspace;
 
-                        return (
-                          <Chip
-                            key={workspace.ownerEmail}
-                            label={workspace.ownerEmail}
-                            color={isSelected ? "primary" : "default"}
-                            variant={isSelected ? "filled" : "outlined"}
-                            onClick={() => setSelectedWorkspace(workspace.ownerEmail)}
-                            role="tab"
-                            aria-selected={isSelected}
-                          />
-                        );
-                      })}
+                          return (
+                            <Chip
+                              key={workspace.id}
+                              label={workspace.name}
+                              color={isSelected ? "primary" : "default"}
+                              variant={isSelected ? "filled" : "outlined"}
+                              onClick={() => setSelectedWorkspace(workspace.id)}
+                              role="tab"
+                              aria-selected={isSelected}
+                            />
+                          );
+                        })
+                      )}
                     </Box>
                   </Stack>
 
@@ -923,13 +1090,18 @@ export function App() {
                       <Typography variant="overline" sx={{ color: alpha("#fff6ef", 0.72) }}>
                         Selected workspace
                       </Typography>
-                      <Typography variant="h4">
-                        {selectedWorkspace || currentUser?.email}
+                      <Typography variant="h4">{currentWorkspace?.name ?? "No workspace selected"}</Typography>
+                      <Typography sx={{ color: alpha("#fff6ef", 0.72) }}>
+                        {currentWorkspace?.description
+                          ? currentWorkspace.description
+                          : focusTodo
+                          ? `Priority now: ${focusTodo}`
+                          : "Create a workspace or switch queues to pick something up."}
                       </Typography>
                       <Typography sx={{ color: alpha("#fff6ef", 0.72) }}>
-                        {focusTodo
-                          ? `Priority now: ${focusTodo}`
-                          : "Add the first task or switch workspaces to pick something up."}
+                        {currentWorkspace
+                          ? `Owned by ${currentWorkspace.ownerEmail}`
+                          : "Workspace details appear here once one is selected."}
                       </Typography>
                     </Stack>
 
@@ -960,8 +1132,20 @@ export function App() {
                       <Chip
                         icon={<PersonRoundedIcon sx={{ fontSize: 16 }} />}
                         label={
-                          currentWorkspace?.role === "owner" ? "Owner access" : "Collaborator access"
+                          currentWorkspace
+                            ? currentWorkspace.role === "owner"
+                              ? "Owner access"
+                              : "Collaborator access"
+                            : "No workspace selected"
                         }
+                        sx={{
+                          bgcolor: alpha("#ffffff", 0.12),
+                          color: "#fff8f2",
+                        }}
+                      />
+                      <Chip
+                        icon={<ShareRoundedIcon sx={{ fontSize: 16 }} />}
+                        label={`${accessibleWorkspaces.filter((workspace) => workspace.role === "owner").length} owned`}
                         sx={{
                           bgcolor: alpha("#ffffff", 0.12),
                           color: "#fff8f2",
@@ -993,6 +1177,111 @@ export function App() {
           <Box className="utility-grid">
             <Paper
               elevation={0}
+              className="soft-panel share-panel"
+              sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "28px", md: "34px" } }}
+            >
+              <Stack spacing={3}>
+                <Stack spacing={1}>
+                  <Typography className="section-kicker">
+                    <GroupRoundedIcon sx={{ fontSize: 16 }} />
+                    Workspace management
+                  </Typography>
+                  <Typography variant="h4">Create or retire queues</Typography>
+                  <Typography color="text.secondary">
+                    Only owners can delete workspaces. Descriptions help everyone understand what a
+                    queue is for before they open it.
+                  </Typography>
+                </Stack>
+
+                <Box component="form" onSubmit={handleCreateWorkspace} aria-label="Create a workspace">
+                  <Stack spacing={1.5}>
+                    <TextField
+                      label="Workspace name"
+                      value={workspaceName}
+                      onChange={(event) => setWorkspaceName(event.target.value)}
+                      disabled={isSubmittingWorkspace}
+                      fullWidth
+                    />
+                    <TextField
+                      label="Description"
+                      value={workspaceDescription}
+                      onChange={(event) => setWorkspaceDescription(event.target.value)}
+                      disabled={isSubmittingWorkspace}
+                      multiline
+                      minRows={3}
+                      fullWidth
+                    />
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      color="secondary"
+                      disabled={isSubmittingWorkspace}
+                      startIcon={
+                        isSubmittingWorkspace ? (
+                          <CircularProgress size={18} color="inherit" />
+                        ) : (
+                          <AddRoundedIcon />
+                        )
+                      }
+                      sx={{ alignSelf: "flex-start" }}
+                    >
+                      {isSubmittingWorkspace ? "Creating…" : "Create workspace"}
+                    </Button>
+                  </Stack>
+                </Box>
+
+                <Stack spacing={1.25}>
+                  <Typography variant="overline" color="text.secondary">
+                    Current workspace
+                  </Typography>
+                  {currentWorkspace ? (
+                    <Stack spacing={1.25}>
+                      <Typography variant="h6">{currentWorkspace.name}</Typography>
+                      <Typography color="text.secondary">
+                        {currentWorkspace.description || "No description yet."}
+                      </Typography>
+                      <Typography color="text.secondary">
+                        Owner: {currentWorkspace.ownerEmail}
+                      </Typography>
+                      {canManageCurrentWorkspace ? (
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          disabled={deletingWorkspaceId === currentWorkspace.id}
+                          onClick={() => void handleDeleteWorkspace(currentWorkspace)}
+                          startIcon={
+                            deletingWorkspaceId === currentWorkspace.id ? (
+                              <CircularProgress size={18} color="inherit" />
+                            ) : (
+                              <DeleteOutlineRoundedIcon />
+                            )
+                          }
+                          sx={{ alignSelf: "flex-start" }}
+                        >
+                          {deletingWorkspaceId === currentWorkspace.id
+                            ? "Deleting…"
+                            : "Delete workspace"}
+                        </Button>
+                      ) : (
+                        <Typography color="text.secondary">
+                          Only the owner can delete this workspace.
+                        </Typography>
+                      )}
+                    </Stack>
+                  ) : (
+                    <Typography color="text.secondary">
+                      No workspace selected yet. Create one above to get started.
+                    </Typography>
+                  )}
+                </Stack>
+
+                {workspaceManageError ? <Alert severity="error">{workspaceManageError}</Alert> : null}
+                {workspaceSuccess ? <Alert severity="success">{workspaceSuccess}</Alert> : null}
+              </Stack>
+            </Paper>
+
+            <Paper
+              elevation={0}
               className="soft-panel composer-panel"
               sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "28px", md: "34px" } }}
             >
@@ -1004,8 +1293,8 @@ export function App() {
                   </Typography>
                   <Typography variant="h4">Add the next move</Typography>
                   <Typography color="text.secondary">
-                    New items land inside <strong>{selectedWorkspace}</strong> and stay owned by
-                    the user who creates them.
+                    New items land inside <strong>{currentWorkspace?.name ?? "the selected workspace"}</strong> and
+                    stay owned by the user who creates them.
                   </Typography>
                 </Stack>
 
@@ -1067,7 +1356,7 @@ export function App() {
                   </Typography>
                   <Typography variant="h4">Invite collaborators</Typography>
                   <Typography color="text.secondary">
-                    Everyone added here can see, edit, and re-share the current workspace.
+                    Everyone added here can see, edit, and re-share <strong>{currentWorkspace?.name ?? "the current workspace"}</strong>.
                   </Typography>
                 </Stack>
 
@@ -1106,15 +1395,21 @@ export function App() {
                     Current collaborators
                   </Typography>
                   <Box className="subtle-list">
-                    <Chip
-                      icon={<PersonRoundedIcon />}
-                      label={`${selectedWorkspace} · owner`}
-                      sx={{
-                        bgcolor: alpha("#16423c", 0.08),
-                        color: "text.primary",
-                      }}
-                    />
-                    {collaboratorEmails.length === 0 ? (
+                    {currentWorkspace ? (
+                      <Chip
+                        icon={<PersonRoundedIcon />}
+                        label={`${currentWorkspace.ownerEmail} · owner`}
+                        sx={{
+                          bgcolor: alpha("#16423c", 0.08),
+                          color: "text.primary",
+                        }}
+                      />
+                    ) : null}
+                    {!currentWorkspace ? (
+                      <Typography color="text.secondary">
+                        Select or create a workspace before inviting collaborators.
+                      </Typography>
+                    ) : collaboratorEmails.length === 0 ? (
                       <Typography color="text.secondary">
                         No collaborators yet. Add someone above to share the queue.
                       </Typography>
@@ -1160,7 +1455,10 @@ export function App() {
                     Workspace queue
                   </Typography>
                   <Typography variant="h3" sx={{ mt: 1 }}>
-                    {selectedWorkspace}
+                    {currentWorkspace?.name ?? "No workspace selected"}
+                  </Typography>
+                  <Typography color="text.secondary" sx={{ mt: 1 }}>
+                    {currentWorkspace?.description || "Choose a workspace to see its queue."}
                   </Typography>
                 </Box>
                 <Box className="surface-chips">

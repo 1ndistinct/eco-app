@@ -25,7 +25,7 @@ test("renders an authenticated workspace, creates a todo, and completes it", asy
     await page.getByRole("button", { name: /save password/i }).click();
   }
 
-  await expect(page.getByRole("heading", { name: /shared queues, explicit owners/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /named queues, explicit owners/i })).toBeVisible();
   await expect(page.getByText(/\d+\s+items remaining/i)).toBeVisible();
 
   await page.getByLabel(/new todo/i).fill(title);

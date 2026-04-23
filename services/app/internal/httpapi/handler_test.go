@@ -50,11 +50,15 @@ func TestSessionStartsUnauthenticatedAndAuthenticatesAfterLogin(t *testing.T) {
 	if loginRec.Code != http.StatusOK {
 		t.Fatalf("unexpected login status: %d body=%s", loginRec.Code, loginRec.Body.String())
 	}
-	if !strings.Contains(loginRec.Body.String(), `"authenticated":true`) {
+	state := requireSessionState(t, loginRec)
+	if !state.Authenticated {
 		t.Fatalf("expected authenticated response, got %q", loginRec.Body.String())
 	}
-	if !strings.Contains(loginRec.Body.String(), `"ownerEmail":"owner@example.com"`) {
-		t.Fatalf("expected own workspace in session response, got %q", loginRec.Body.String())
+	if len(state.AccessibleWorkspaces) != 1 || state.AccessibleWorkspaces[0].OwnerEmail != "owner@example.com" {
+		t.Fatalf("expected own workspace in session response, got %+v", state.AccessibleWorkspaces)
+	}
+	if state.AccessibleWorkspaces[0].Name != defaultWorkspaceName {
+		t.Fatalf("unexpected default workspace name: %+v", state.AccessibleWorkspaces[0])
 	}
 }
 
@@ -179,8 +183,12 @@ func TestProvisionedUserMustResetPasswordBeforeUsingTodos(t *testing.T) {
 	if listRec.Code != http.StatusOK {
 		t.Fatalf("unexpected list status after reset: %d body=%s", listRec.Code, listRec.Body.String())
 	}
-	if got := strings.TrimSpace(listRec.Body.String()); got != `{"items":[],"workspaceEmail":"reset@example.com"}` {
-		t.Fatalf("unexpected list body after reset: %q", got)
+	var listResp todoListResponse
+	if err := json.Unmarshal(listRec.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode list response after reset: %v", err)
+	}
+	if listResp.WorkspaceID == "" || len(listResp.Items) != 0 {
+		t.Fatalf("unexpected list response after reset: %+v", listResp)
 	}
 }
 
@@ -217,6 +225,7 @@ func TestAuthenticatedUserCreatesTodoInOwnWorkspace(t *testing.T) {
 	handler := NewHandler(store)
 	loginRec := login(t, handler, "owner@example.com", "owner-password-123")
 	cookie := requireSessionCookie(t, loginRec)
+	workspace := requireFirstWorkspace(t, loginRec)
 
 	createReq := httptest.NewRequest(http.MethodPost, "/api/todos", strings.NewReader(`{"title":"Ship auth flow"}`))
 	createReq.Header.Set("Content-Type", "application/json")
@@ -227,8 +236,12 @@ func TestAuthenticatedUserCreatesTodoInOwnWorkspace(t *testing.T) {
 	if createRec.Code != http.StatusCreated {
 		t.Fatalf("unexpected create status: %d body=%s", createRec.Code, createRec.Body.String())
 	}
-	if got := strings.TrimSpace(createRec.Body.String()); got != `{"id":"1","title":"Ship auth flow","completed":false,"ownerEmail":"owner@example.com","workspaceEmail":"owner@example.com"}` {
-		t.Fatalf("unexpected create body: %q", got)
+	var todo Todo
+	if err := json.Unmarshal(createRec.Body.Bytes(), &todo); err != nil {
+		t.Fatalf("decode created todo: %v", err)
+	}
+	if todo.OwnerEmail != "owner@example.com" || todo.WorkspaceID != workspace.ID || todo.Title != "Ship auth flow" || todo.Completed {
+		t.Fatalf("unexpected create body: %+v", todo)
 	}
 }
 
@@ -242,8 +255,11 @@ func TestSharedWorkspaceCollaboratorCanViewUpdateAndDeleteOwnerTodos(t *testing.
 	}
 
 	handler := NewHandler(store)
-	ownerCookie := requireSessionCookie(t, login(t, handler, "owner@example.com", "owner-password-123"))
-	collabCookie := requireSessionCookie(t, login(t, handler, "collab@example.com", "collab-password-123"))
+	ownerLoginRec := login(t, handler, "owner@example.com", "owner-password-123")
+	ownerCookie := requireSessionCookie(t, ownerLoginRec)
+	collabLoginRec := login(t, handler, "collab@example.com", "collab-password-123")
+	collabCookie := requireSessionCookie(t, collabLoginRec)
+	ownerWorkspace := requireFirstWorkspace(t, ownerLoginRec)
 
 	createReq := httptest.NewRequest(http.MethodPost, "/api/todos", strings.NewReader(`{"title":"Share the queue"}`))
 	createReq.Header.Set("Content-Type", "application/json")
@@ -254,7 +270,7 @@ func TestSharedWorkspaceCollaboratorCanViewUpdateAndDeleteOwnerTodos(t *testing.
 		t.Fatalf("unexpected owner create status: %d body=%s", createRec.Code, createRec.Body.String())
 	}
 
-	shareReq := httptest.NewRequest(http.MethodPost, "/api/shares", strings.NewReader(`{"workspaceEmail":"owner@example.com","email":"collab@example.com"}`))
+	shareReq := httptest.NewRequest(http.MethodPost, "/api/shares", strings.NewReader(`{"workspaceId":"`+ownerWorkspace.ID+`","email":"collab@example.com"}`))
 	shareReq.Header.Set("Content-Type", "application/json")
 	shareReq.AddCookie(ownerCookie)
 	shareRec := httptest.NewRecorder()
@@ -264,7 +280,7 @@ func TestSharedWorkspaceCollaboratorCanViewUpdateAndDeleteOwnerTodos(t *testing.
 		t.Fatalf("unexpected share status: %d body=%s", shareRec.Code, shareRec.Body.String())
 	}
 
-	listReq := httptest.NewRequest(http.MethodGet, "/api/todos?workspace=owner@example.com", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/todos?workspace="+url.QueryEscape(ownerWorkspace.ID), nil)
 	listReq.AddCookie(collabCookie)
 	listRec := httptest.NewRecorder()
 	handler.ServeHTTP(listRec, listReq)
@@ -285,8 +301,12 @@ func TestSharedWorkspaceCollaboratorCanViewUpdateAndDeleteOwnerTodos(t *testing.
 	if updateRec.Code != http.StatusOK {
 		t.Fatalf("unexpected collaborator update status: %d body=%s", updateRec.Code, updateRec.Body.String())
 	}
-	if got := strings.TrimSpace(updateRec.Body.String()); got != `{"id":"1","title":"Share the queue","completed":true,"ownerEmail":"owner@example.com","workspaceEmail":"owner@example.com"}` {
-		t.Fatalf("unexpected collaborator update body: %q", got)
+	var updatedTodo Todo
+	if err := json.Unmarshal(updateRec.Body.Bytes(), &updatedTodo); err != nil {
+		t.Fatalf("decode collaborator update body: %v", err)
+	}
+	if !updatedTodo.Completed || updatedTodo.WorkspaceID != ownerWorkspace.ID {
+		t.Fatalf("unexpected collaborator update body: %+v", updatedTodo)
 	}
 
 	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/todos/1", nil)
@@ -298,7 +318,7 @@ func TestSharedWorkspaceCollaboratorCanViewUpdateAndDeleteOwnerTodos(t *testing.
 		t.Fatalf("unexpected collaborator delete status: %d body=%s", deleteRec.Code, deleteRec.Body.String())
 	}
 
-	listAfterDeleteReq := httptest.NewRequest(http.MethodGet, "/api/todos?workspace=owner@example.com", nil)
+	listAfterDeleteReq := httptest.NewRequest(http.MethodGet, "/api/todos?workspace="+url.QueryEscape(ownerWorkspace.ID), nil)
 	listAfterDeleteReq.AddCookie(ownerCookie)
 	listAfterDeleteRec := httptest.NewRecorder()
 	handler.ServeHTTP(listAfterDeleteRec, listAfterDeleteReq)
@@ -306,8 +326,64 @@ func TestSharedWorkspaceCollaboratorCanViewUpdateAndDeleteOwnerTodos(t *testing.
 	if listAfterDeleteRec.Code != http.StatusOK {
 		t.Fatalf("unexpected owner list status after delete: %d body=%s", listAfterDeleteRec.Code, listAfterDeleteRec.Body.String())
 	}
-	if got := strings.TrimSpace(listAfterDeleteRec.Body.String()); got != `{"items":[],"workspaceEmail":"owner@example.com"}` {
-		t.Fatalf("unexpected owner list body after delete: %q", got)
+	var listAfterDeleteResp todoListResponse
+	if err := json.Unmarshal(listAfterDeleteRec.Body.Bytes(), &listAfterDeleteResp); err != nil {
+		t.Fatalf("decode owner list after delete: %v", err)
+	}
+	if listAfterDeleteResp.WorkspaceID != ownerWorkspace.ID || len(listAfterDeleteResp.Items) != 0 {
+		t.Fatalf("unexpected owner list body after delete: %+v", listAfterDeleteResp)
+	}
+}
+
+func TestOwnerCanCreateAndDeleteWorkspace(t *testing.T) {
+	store := newMemoryStore()
+	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
+		t.Fatalf("seed owner: %v", err)
+	}
+
+	handler := NewHandler(store)
+	loginRec := login(t, handler, "owner@example.com", "owner-password-123")
+	cookie := requireSessionCookie(t, loginRec)
+
+	createReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/workspaces",
+		strings.NewReader(`{"name":"Launch Queue","description":"Track rollout work."}`),
+	)
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.AddCookie(cookie)
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("unexpected workspace create status: %d body=%s", createRec.Code, createRec.Body.String())
+	}
+
+	var workspace WorkspaceAccess
+	if err := json.Unmarshal(createRec.Body.Bytes(), &workspace); err != nil {
+		t.Fatalf("decode workspace create body: %v", err)
+	}
+	if workspace.ID == "" || workspace.Name != "Launch Queue" || workspace.Description != "Track rollout work." || workspace.Role != "owner" {
+		t.Fatalf("unexpected created workspace: %+v", workspace)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/workspaces/"+workspace.ID, nil)
+	deleteReq.AddCookie(cookie)
+	deleteRec := httptest.NewRecorder()
+	handler.ServeHTTP(deleteRec, deleteReq)
+
+	if deleteRec.Code != http.StatusNoContent {
+		t.Fatalf("unexpected workspace delete status: %d body=%s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	sessionReq := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	sessionReq.AddCookie(cookie)
+	sessionRec := httptest.NewRecorder()
+	handler.ServeHTTP(sessionRec, sessionReq)
+
+	state := requireSessionState(t, sessionRec)
+	if len(state.AccessibleWorkspaces) != 1 {
+		t.Fatalf("expected only the default workspace after delete, got %+v", state.AccessibleWorkspaces)
 	}
 }
 
@@ -336,6 +412,28 @@ func requireSessionCookie(t *testing.T, rec *httptest.ResponseRecorder) *http.Co
 	return nil
 }
 
+func requireSessionState(t *testing.T, rec *httptest.ResponseRecorder) SessionState {
+	t.Helper()
+
+	var state SessionState
+	if err := json.Unmarshal(rec.Body.Bytes(), &state); err != nil {
+		t.Fatalf("decode session state: %v", err)
+	}
+
+	return state
+}
+
+func requireFirstWorkspace(t *testing.T, rec *httptest.ResponseRecorder) WorkspaceAccess {
+	t.Helper()
+
+	state := requireSessionState(t, rec)
+	if len(state.AccessibleWorkspaces) == 0 {
+		t.Fatalf("expected at least one accessible workspace")
+	}
+
+	return state.AccessibleWorkspaces[0]
+}
+
 func TestLoginResponseSerializesWorkspaces(t *testing.T) {
 	store := newMemoryStore()
 	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
@@ -358,6 +456,9 @@ func TestLoginResponseSerializesWorkspaces(t *testing.T) {
 	}
 	if len(state.AccessibleWorkspaces) != 1 || state.AccessibleWorkspaces[0].OwnerEmail != "owner@example.com" {
 		t.Fatalf("unexpected workspaces: %+v", state.AccessibleWorkspaces)
+	}
+	if state.AccessibleWorkspaces[0].ID == "" || state.AccessibleWorkspaces[0].Name != defaultWorkspaceName {
+		t.Fatalf("unexpected serialized workspace: %+v", state.AccessibleWorkspaces[0])
 	}
 }
 

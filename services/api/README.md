@@ -28,6 +28,9 @@ Backend owns the initial service contract handoff for the first vertical slice.
   },
   "accessibleWorkspaces": [
     {
+      "id": "1",
+      "name": "Personal",
+      "description": "Default workspace",
       "ownerEmail": "owner@example.com",
       "role": "owner"
     }
@@ -88,13 +91,46 @@ Backend owns the initial service contract handoff for the first vertical slice.
 - response: `204`
 - side effect: clears the session cookie
 
+## Workspace API
+
+Authenticated users can own multiple named workspaces.
+
+### `POST /api/workspaces`
+- request: `application/json`
+```json
+{"name":"Launch Queue","description":"Track rollout work."}
+```
+- response: `201 application/json`
+```json
+{
+  "id": "2",
+  "name": "Launch Queue",
+  "description": "Track rollout work.",
+  "ownerEmail": "owner@example.com",
+  "role": "owner"
+}
+```
+- validation:
+  - `name` is required after trimming whitespace
+
+### `DELETE /api/workspaces/{id}`
+- response: `204`
+- requirements:
+  - authenticated session required
+  - password reset must already be completed
+  - caller must own the workspace
+- side effects:
+  - deletes the workspace
+  - deletes its collaborator memberships
+  - deletes its todos
+
 ## Todo API v2
 
-Todos are scoped to a workspace owned by a user. Each todo keeps both:
-- `workspaceEmail`: the workspace it belongs to
+Todos are scoped to a named workspace. Each todo keeps both:
+- `workspaceId`: the workspace it belongs to
 - `ownerEmail`: the user who created it
 
-### `GET /api/todos?workspace=owner@example.com`
+### `GET /api/todos?workspace=1`
 - response: `200 application/json`
 ```json
 {
@@ -104,10 +140,10 @@ Todos are scoped to a workspace owned by a user. Each todo keeps both:
       "title": "Write backend first",
       "completed": false,
       "ownerEmail": "owner@example.com",
-      "workspaceEmail": "owner@example.com"
+      "workspaceId": "1"
     }
   ],
-  "workspaceEmail": "owner@example.com"
+  "workspaceId": "1"
 }
 ```
 - requirements:
@@ -118,7 +154,7 @@ Todos are scoped to a workspace owned by a user. Each todo keeps both:
 ### `POST /api/todos`
 - request: `application/json`
 ```json
-{"title":"Write backend first","workspaceEmail":"owner@example.com"}
+{"title":"Write backend first","workspaceId":"1"}
 ```
 - response: `201 application/json`
 ```json
@@ -127,12 +163,12 @@ Todos are scoped to a workspace owned by a user. Each todo keeps both:
   "title": "Write backend first",
   "completed": false,
   "ownerEmail": "owner@example.com",
-  "workspaceEmail": "owner@example.com"
+  "workspaceId": "1"
 }
 ```
 - validation:
   - `title` is required after trimming whitespace
-  - `workspaceEmail` is optional and defaults to the signed-in user
+  - `workspaceId` is optional and defaults to the first accessible workspace in the session bootstrap
 
 ### `PATCH /api/todos/{id}`
 - request: `application/json`
@@ -146,7 +182,7 @@ Todos are scoped to a workspace owned by a user. Each todo keeps both:
   "title": "Write backend first",
   "completed": true,
   "ownerEmail": "owner@example.com",
-  "workspaceEmail": "owner@example.com"
+  "workspaceId": "1"
 }
 ```
 - validation:
@@ -187,28 +223,28 @@ Todos are scoped to a workspace owned by a user. Each todo keeps both:
 
 ## Workspace Sharing API
 
-### `GET /api/shares?workspace=owner@example.com`
+### `GET /api/shares?workspace=1`
 - response: `200 application/json`
 ```json
 {
   "items": [
     {
-      "workspaceEmail": "owner@example.com",
+      "workspaceId": "1",
       "email": "collab@example.com"
     }
   ],
-  "workspaceEmail": "owner@example.com"
+  "workspaceId": "1"
 }
 ```
 
 ### `POST /api/shares`
 - request: `application/json`
 ```json
-{"workspaceEmail":"owner@example.com","email":"collab@example.com"}
+{"workspaceId":"1","email":"collab@example.com"}
 ```
 - response: `201 application/json`
 ```json
-{"workspaceEmail":"owner@example.com","email":"collab@example.com"}
+{"workspaceId":"1","email":"collab@example.com"}
 ```
 - requirements:
   - authenticated session required
@@ -219,12 +255,14 @@ Todos are scoped to a workspace owned by a user. Each todo keeps both:
 ## Frontend Integration Guidance
 - Treat `id` as an opaque string.
 - Use `GET /api/auth/session` as the bootstrap source of truth.
+- `accessibleWorkspaces` now carries the workspace `id`, `name`, `description`, `ownerEmail`, and `role`.
 - Provisioned users will log in once, then immediately complete the password reset flow before any todo or share actions are allowed.
 - Google login is available only when the backend reports `googleLoginEnabled: true`.
 - Google login only succeeds for a verified Gmail address that exactly matches an existing provisioned user.
 - A successful Google login authenticates the user but does not clear the initial password-reset requirement.
 - Provisioned users who sign in with Google first still land in the password reset flow before todo or share actions are allowed.
 - While `passwordResetRequired` is still true, the reset flow only needs the new password because the authenticated session is already the proof of identity.
+- Newly provisioned users start with a default `Personal` workspace and can create or delete additional workspaces they own.
 - Todos and sessions are stored in Postgres.
 - Passwords are stored as hashes only.
 - Schema changes are managed with embedded goose migrations.

@@ -12,6 +12,9 @@ function authenticatedSession(passwordResetRequired = false) {
     },
     accessibleWorkspaces: [
       {
+        id: "workspace-1",
+        name: "Personal",
+        description: "Default workspace",
         ownerEmail: "owner@example.com",
         role: "owner",
       },
@@ -25,6 +28,7 @@ describe("App", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("confirm", vi.fn(() => true));
   });
 
   afterEach(() => {
@@ -93,10 +97,10 @@ describe("App", () => {
                 title: "Ship auth flow",
                 completed: false,
                 ownerEmail: "owner@example.com",
-                workspaceEmail: "owner@example.com",
+                workspaceId: "workspace-1",
               },
             ],
-            workspaceEmail: "owner@example.com",
+            workspaceId: "workspace-1",
           }),
           {
             status: 200,
@@ -108,7 +112,7 @@ describe("App", () => {
         new Response(
           JSON.stringify({
             items: [],
-            workspaceEmail: "owner@example.com",
+            workspaceId: "workspace-1",
           }),
           {
             status: 200,
@@ -129,12 +133,14 @@ describe("App", () => {
 
     expect(await screen.findByText("Ship auth flow")).toBeInTheDocument();
     expect(screen.getByText(/owned by you/i)).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /personal/i })).toBeInTheDocument();
+
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(4);
     });
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/auth/login");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/todos?workspace=owner%40example.com");
-    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/shares?workspace=owner%40example.com");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/todos?workspace=workspace-1");
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/shares?workspace=workspace-1");
   });
 
   it("forces a password reset before workspace data loads", async () => {
@@ -155,7 +161,7 @@ describe("App", () => {
         new Response(
           JSON.stringify({
             items: [],
-            workspaceEmail: "owner@example.com",
+            workspaceId: "workspace-1",
           }),
           {
             status: 200,
@@ -167,7 +173,7 @@ describe("App", () => {
         new Response(
           JSON.stringify({
             items: [],
-            workspaceEmail: "owner@example.com",
+            workspaceId: "workspace-1",
           }),
           {
             status: 200,
@@ -186,7 +192,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /save password/i }));
 
     expect(
-      await screen.findByRole("heading", { name: /shared queues, explicit owners/i }),
+      await screen.findByRole("heading", { name: /named queues, explicit owners/i }),
     ).toBeInTheDocument();
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/auth/reset-password");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
@@ -226,11 +232,11 @@ describe("App", () => {
         );
       }
 
-      if (url === "/api/todos?workspace=owner%40example.com") {
+      if (url === "/api/todos?workspace=workspace-1") {
         return new Response(
           JSON.stringify({
             items: [],
-            workspaceEmail: "owner@example.com",
+            workspaceId: "workspace-1",
           }),
           {
             status: 200,
@@ -239,11 +245,11 @@ describe("App", () => {
         );
       }
 
-      if (url === "/api/shares?workspace=owner%40example.com") {
+      if (url === "/api/shares?workspace=workspace-1") {
         return new Response(
           JSON.stringify({
             items: [],
-            workspaceEmail: "owner@example.com",
+            workspaceId: "workspace-1",
           }),
           {
             status: 200,
@@ -273,7 +279,7 @@ describe("App", () => {
     expect(sessionRequestCount).toBe(2);
   });
 
-  it("creates, shares, and updates todos inside the authenticated workspace", async () => {
+  it("creates, shares, updates, and deletes todos inside the authenticated workspace", async () => {
     fetchMock
       .mockResolvedValueOnce(
         new Response(JSON.stringify(authenticatedSession()), {
@@ -290,10 +296,10 @@ describe("App", () => {
                 title: "Existing task",
                 completed: false,
                 ownerEmail: "owner@example.com",
-                workspaceEmail: "owner@example.com",
+                workspaceId: "workspace-1",
               },
             ],
-            workspaceEmail: "owner@example.com",
+            workspaceId: "workspace-1",
           }),
           {
             status: 200,
@@ -305,7 +311,7 @@ describe("App", () => {
         new Response(
           JSON.stringify({
             items: [],
-            workspaceEmail: "owner@example.com",
+            workspaceId: "workspace-1",
           }),
           {
             status: 200,
@@ -320,7 +326,7 @@ describe("App", () => {
             title: "Write invite flow",
             completed: false,
             ownerEmail: "owner@example.com",
-            workspaceEmail: "owner@example.com",
+            workspaceId: "workspace-1",
           }),
           {
             status: 201,
@@ -331,7 +337,7 @@ describe("App", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            workspaceEmail: "owner@example.com",
+            workspaceId: "workspace-1",
             email: "collab@example.com",
           }),
           {
@@ -347,7 +353,7 @@ describe("App", () => {
             title: "Existing task",
             completed: true,
             ownerEmail: "owner@example.com",
-            workspaceEmail: "owner@example.com",
+            workspaceId: "workspace-1",
           }),
           {
             status: 200,
@@ -389,7 +395,7 @@ describe("App", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: "Write invite flow",
-        workspaceEmail: "owner@example.com",
+        workspaceId: "workspace-1",
       }),
     });
 
@@ -398,7 +404,7 @@ describe("App", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        workspaceEmail: "owner@example.com",
+        workspaceId: "workspace-1",
         email: "collab@example.com",
       }),
     });
@@ -411,6 +417,137 @@ describe("App", () => {
     });
 
     expect(fetchMock.mock.calls[6]?.[0]).toBe("/api/todos/2");
+    expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({
+      method: "DELETE",
+    });
+  });
+
+  it("creates and deletes an owned workspace", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(authenticatedSession()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [],
+            workspaceId: "workspace-1",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [],
+            workspaceId: "workspace-1",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "workspace-2",
+            name: "Launch Queue",
+            description: "Track rollout work.",
+            ownerEmail: "owner@example.com",
+            role: "owner",
+          }),
+          {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [],
+            workspaceId: "workspace-2",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [],
+            workspaceId: "workspace-2",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [],
+            workspaceId: "workspace-1",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [],
+            workspaceId: "workspace-1",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: /named queues, explicit owners/i });
+
+    fireEvent.change(screen.getByLabelText(/workspace name/i), {
+      target: { value: "Launch Queue" },
+    });
+    fireEvent.change(screen.getByLabelText(/description/i), {
+      target: { value: "Track rollout work." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /create workspace/i }));
+
+    expect(await screen.findByText(/created launch queue/i)).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /launch queue/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /delete workspace/i }));
+    expect(await screen.findByText(/deleted launch queue/i)).toBeInTheDocument();
+
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/workspaces");
+    expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Launch Queue",
+        description: "Track rollout work.",
+      }),
+    });
+
+    expect(fetchMock.mock.calls[6]?.[0]).toBe("/api/workspaces/workspace-2");
     expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({
       method: "DELETE",
     });

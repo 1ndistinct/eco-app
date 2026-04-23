@@ -11,8 +11,8 @@ import (
 )
 
 type createTodoRequest struct {
-	Title          string `json:"title"`
-	WorkspaceEmail string `json:"workspaceEmail"`
+	Title       string `json:"title"`
+	WorkspaceID string `json:"workspaceId"`
 }
 
 type updateTodoRequest struct {
@@ -30,8 +30,13 @@ type resetPasswordRequest struct {
 }
 
 type createShareRequest struct {
-	WorkspaceEmail string `json:"workspaceEmail"`
-	Email          string `json:"email"`
+	WorkspaceID string `json:"workspaceId"`
+	Email       string `json:"email"`
+}
+
+type createWorkspaceRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 type errorResponse struct {
@@ -39,13 +44,13 @@ type errorResponse struct {
 }
 
 type todoListResponse struct {
-	Items          []Todo `json:"items"`
-	WorkspaceEmail string `json:"workspaceEmail"`
+	Items       []Todo `json:"items"`
+	WorkspaceID string `json:"workspaceId"`
 }
 
 type shareListResponse struct {
-	Items          []WorkspaceShare `json:"items"`
-	WorkspaceEmail string           `json:"workspaceEmail"`
+	Items       []WorkspaceShare `json:"items"`
+	WorkspaceID string           `json:"workspaceId"`
 }
 
 type handler struct {
@@ -76,6 +81,8 @@ func NewHandler(store AppStore, options ...HandlerOptions) http.Handler {
 	mux.HandleFunc("/api/auth/google/callback", h.handleGoogleLoginCallback)
 	mux.HandleFunc("/api/auth/logout", h.handleLogout)
 	mux.HandleFunc("/api/auth/reset-password", h.handleResetPassword)
+	mux.HandleFunc("/api/workspaces", h.handleWorkspaces)
+	mux.HandleFunc("/api/workspaces/", h.handleWorkspace)
 	mux.HandleFunc("/api/todos", h.handleTodos)
 	mux.HandleFunc("/api/todos/", h.handleTodo)
 	mux.HandleFunc("/api/shares", h.handleShares)
@@ -350,6 +357,72 @@ func (h *handler) handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, state)
 }
 
+func (h *handler) handleWorkspaces(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.requireReadySession(w, r)
+	if !ok {
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPost:
+		var req createWorkspaceRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON body"})
+			return
+		}
+
+		workspace, err := h.store.CreateWorkspace(r.Context(), user.Email, req.Name, req.Description)
+		if errors.Is(err, ErrWorkspaceNameRequired) {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, workspace)
+	default:
+		w.Header().Set("Allow", "POST")
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+	}
+}
+
+func (h *handler) handleWorkspace(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.requireReadySession(w, r)
+	if !ok {
+		return
+	}
+
+	id := strings.TrimPrefix(r.URL.Path, "/api/workspaces/")
+	if id == "" || strings.Contains(id, "/") {
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: "workspace not found"})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodDelete:
+		err := h.store.DeleteWorkspace(r.Context(), user.Email, id)
+		if errors.Is(err, ErrWorkspaceNotFound) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "workspace not found"})
+			return
+		}
+		if errors.Is(err, ErrWorkspaceAccessDenied) {
+			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		w.Header().Set("Allow", "DELETE")
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+	}
+}
+
 func (h *handler) handleTodos(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.requireReadySession(w, r)
 	if !ok {
@@ -358,8 +431,16 @@ func (h *handler) handleTodos(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		workspaceEmail := h.workspaceFromQuery(r, user.Email)
-		items, err := h.store.ListTodos(r.Context(), user.Email, workspaceEmail)
+		workspaceID, err := h.workspaceFromQuery(r.Context(), r, user.Email)
+		if errors.Is(err, ErrWorkspaceAccessDenied) {
+			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+			return
+		}
+		items, err := h.store.ListTodos(r.Context(), user.Email, workspaceID)
 		if errors.Is(err, ErrWorkspaceAccessDenied) {
 			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
 			return
@@ -369,8 +450,8 @@ func (h *handler) handleTodos(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, todoListResponse{
-			Items:          items,
-			WorkspaceEmail: workspaceEmail,
+			Items:       items,
+			WorkspaceID: workspaceID,
 		})
 	case http.MethodPost:
 		var req createTodoRequest
@@ -385,8 +466,16 @@ func (h *handler) handleTodos(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		workspaceEmail := h.workspaceFromBody(req.WorkspaceEmail, user.Email)
-		todo, err := h.store.CreateTodo(r.Context(), user.Email, workspaceEmail, title)
+		workspaceID, err := h.workspaceFromBody(r.Context(), req.WorkspaceID, user.Email)
+		if errors.Is(err, ErrWorkspaceAccessDenied) {
+			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+			return
+		}
+		todo, err := h.store.CreateTodo(r.Context(), user.Email, workspaceID, title)
 		if errors.Is(err, ErrWorkspaceAccessDenied) {
 			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
 			return
@@ -471,8 +560,16 @@ func (h *handler) handleShares(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		workspaceEmail := h.workspaceFromQuery(r, user.Email)
-		items, err := h.store.ListWorkspaceShares(r.Context(), user.Email, workspaceEmail)
+		workspaceID, err := h.workspaceFromQuery(r.Context(), r, user.Email)
+		if errors.Is(err, ErrWorkspaceAccessDenied) {
+			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+			return
+		}
+		items, err := h.store.ListWorkspaceShares(r.Context(), user.Email, workspaceID)
 		if errors.Is(err, ErrWorkspaceAccessDenied) {
 			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
 			return
@@ -483,8 +580,8 @@ func (h *handler) handleShares(w http.ResponseWriter, r *http.Request) {
 		}
 
 		writeJSON(w, http.StatusOK, shareListResponse{
-			Items:          items,
-			WorkspaceEmail: workspaceEmail,
+			Items:       items,
+			WorkspaceID: workspaceID,
 		})
 	case http.MethodPost:
 		var req createShareRequest
@@ -493,8 +590,16 @@ func (h *handler) handleShares(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		workspaceEmail := h.workspaceFromBody(req.WorkspaceEmail, user.Email)
-		share, err := h.store.CreateWorkspaceShare(r.Context(), user.Email, workspaceEmail, req.Email)
+		workspaceID, err := h.workspaceFromBody(r.Context(), req.WorkspaceID, user.Email)
+		if errors.Is(err, ErrWorkspaceAccessDenied) {
+			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+			return
+		}
+		share, err := h.store.CreateWorkspaceShare(r.Context(), user.Email, workspaceID, req.Email)
 		if errors.Is(err, ErrWorkspaceAccessDenied) {
 			writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
 			return
@@ -594,17 +699,25 @@ func (h *handler) unauthenticatedSessionState() SessionState {
 	}
 }
 
-func (h *handler) workspaceFromQuery(r *http.Request, fallback string) string {
-	return h.workspaceFromBody(r.URL.Query().Get("workspace"), fallback)
+func (h *handler) workspaceFromQuery(ctx context.Context, r *http.Request, fallbackUserEmail string) (string, error) {
+	return h.workspaceFromBody(ctx, r.URL.Query().Get("workspace"), fallbackUserEmail)
 }
 
-func (h *handler) workspaceFromBody(value string, fallback string) string {
-	normalizedValue := normalizeEmail(value)
-	if normalizedValue == "" {
-		return normalizeEmail(fallback)
+func (h *handler) workspaceFromBody(ctx context.Context, value string, fallbackUserEmail string) (string, error) {
+	normalizedValue := strings.TrimSpace(value)
+	if normalizedValue != "" {
+		return normalizedValue, nil
 	}
 
-	return normalizedValue
+	workspaces, err := h.store.ListAccessibleWorkspaces(ctx, fallbackUserEmail)
+	if err != nil {
+		return "", err
+	}
+	if len(workspaces) == 0 {
+		return "", ErrWorkspaceAccessDenied
+	}
+
+	return workspaces[0].ID, nil
 }
 
 func healthzHandler(w http.ResponseWriter, _ *http.Request) {
