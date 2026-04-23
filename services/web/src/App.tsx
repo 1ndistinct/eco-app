@@ -89,6 +89,18 @@ const UNAUTHENTICATED_SESSION: SessionState = {
 };
 const EMPTY_WORKSPACES: WorkspaceAccess[] = [];
 
+function normalizeSessionState(data: Partial<SessionState>): SessionState {
+  return {
+    authenticated: data.authenticated === true,
+    googleLoginEnabled: data.googleLoginEnabled === true,
+    googleLoginURL: data.googleLoginURL ?? "",
+    user: data.user,
+    accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
+      ? data.accessibleWorkspaces
+      : [],
+  };
+}
+
 function authErrorMessage(code: string) {
   switch (code) {
     case "google_login_unavailable":
@@ -198,15 +210,7 @@ export function App() {
 
         const data = (await response.json()) as SessionState;
         if (isMounted) {
-          setSession({
-            authenticated: data.authenticated,
-            googleLoginEnabled: data.googleLoginEnabled === true,
-            googleLoginURL: data.googleLoginURL ?? "",
-            user: data.user,
-            accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
-              ? data.accessibleWorkspaces
-              : [],
-          });
+          setSession(normalizeSessionState(data));
         }
       } catch (error) {
         if (isMounted) {
@@ -349,15 +353,7 @@ export function App() {
       }
 
       const data = (await response.json()) as SessionState;
-      setSession({
-        authenticated: data.authenticated,
-        googleLoginEnabled: data.googleLoginEnabled === true,
-        googleLoginURL: data.googleLoginURL ?? "",
-        user: data.user,
-        accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
-          ? data.accessibleWorkspaces
-          : [],
-      });
+      setSession(normalizeSessionState(data));
       setResetCurrentPassword("");
       setResetNewPassword("");
     } catch (error) {
@@ -395,15 +391,7 @@ export function App() {
       }
 
       const data = (await response.json()) as SessionState;
-      setSession({
-        authenticated: data.authenticated,
-        googleLoginEnabled: data.googleLoginEnabled === true,
-        googleLoginURL: data.googleLoginURL ?? "",
-        user: data.user,
-        accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
-          ? data.accessibleWorkspaces
-          : [],
-      });
+      setSession(normalizeSessionState(data));
       setResetCurrentPassword("");
       setResetNewPassword("");
     } catch (error) {
@@ -416,8 +404,20 @@ export function App() {
   }
 
   async function handleLogout() {
-    await fetch(LOGOUT_ENDPOINT, { method: "POST" });
-    setSession(UNAUTHENTICATED_SESSION);
+    try {
+      await fetch(LOGOUT_ENDPOINT, { method: "POST" });
+
+      const response = await fetch(SESSION_ENDPOINT);
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "Unable to load the current session."));
+      }
+
+      const data = (await response.json()) as SessionState;
+      setSession(normalizeSessionState(data));
+      setSessionError(null);
+    } catch {
+      setSession(UNAUTHENTICATED_SESSION);
+    }
     setLoginPassword("");
     setSelectedWorkspace("");
     setTodos([]);

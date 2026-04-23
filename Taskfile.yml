@@ -280,6 +280,21 @@ tasks:
         kubectl rollout status deployment/"$release-app" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
 
+  deploy:docker:tm:
+    desc: Build images with Docker and deploy to tm with tm values and optional tm secrets
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        export K3D_VALUES_FILE="./deploy/k3d/tm.values.yaml"; \
+        if [ -n "${K3D_SECRETS_FILE:-}" ]; then \
+          export K3D_SECRETS_FILE; \
+        elif [ -f "./deploy/k3d/tm.secrets.yaml" ]; then \
+          export K3D_SECRETS_FILE="./deploy/k3d/tm.secrets.yaml"; \
+        else \
+          unset K3D_SECRETS_FILE 2>/dev/null || true; \
+        fi; \
+        task deploy:docker'
+
   up:
     desc: Alias for deploy
     cmds:

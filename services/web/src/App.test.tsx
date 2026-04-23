@@ -196,6 +196,81 @@ describe("App", () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/auth/reset-password");
   });
 
+  it("reloads the signed-out session after logout so Google login remains available", async () => {
+    let sessionRequestCount = 0;
+    fetchMock.mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url === "/api/auth/session") {
+        sessionRequestCount += 1;
+
+        if (sessionRequestCount === 1) {
+          return new Response(JSON.stringify(authenticatedSession()), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(
+          JSON.stringify({
+            authenticated: false,
+            googleLoginEnabled: true,
+            googleLoginURL: "https://eco.treehousehl.com/api/auth/google/start",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (url === "/api/todos?workspace=owner%40example.com") {
+        return new Response(
+          JSON.stringify({
+            items: [],
+            workspaceEmail: "owner@example.com",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (url === "/api/shares?workspace=owner%40example.com") {
+        return new Response(
+          JSON.stringify({
+            items: [],
+            workspaceEmail: "owner@example.com",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (url === "/api/auth/logout") {
+        return new Response(null, { status: 204 });
+      }
+
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /log out/i }));
+
+    const googleLink = await screen.findByRole("link", { name: /continue with google/i });
+    expect(googleLink).toHaveAttribute(
+      "href",
+      "https://eco.treehousehl.com/api/auth/google/start",
+    );
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", { method: "POST" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/session");
+    expect(sessionRequestCount).toBe(2);
+  });
+
   it("creates, shares, and updates todos inside the authenticated workspace", async () => {
     fetchMock
       .mockResolvedValueOnce(

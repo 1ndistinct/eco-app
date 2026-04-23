@@ -12,6 +12,7 @@ Use Taskfile commands for echo-agentic-todo-postfix-20260411210213.
 - task test:e2e
 - task deploy
 - task deploy:docker
+- task deploy:docker:tm
 - task docker:push
 - task helm:template
 - task tilt:up
@@ -50,7 +51,8 @@ Set `K3D_SECRETS_FILE=./deploy/k3d/tm.secrets.yaml` when you want `task helm:tem
 For Google OAuth on `tm`, use `https://eco.treehousehl.com` as `GOOGLE_OAUTH_PUBLIC_BASE_URL`.
 Register `https://eco.treehousehl.com/api/auth/google/callback` as the Google OAuth redirect URI for that deployment.
 The standard `tm` Docker deploy path with Google OAuth is:
-- `K3D_VALUES_FILE=./deploy/k3d/tm.values.yaml K3D_SECRETS_FILE=./deploy/k3d/tm.secrets.yaml task deploy:docker`
+- `task deploy:docker:tm`
+`task deploy:docker:tm` always uses `deploy/k3d/tm.values.yaml` and automatically loads `deploy/k3d/tm.secrets.yaml` when that file exists. Override `K3D_SECRETS_FILE` if you need a different local-only secrets file.
 Set `INGRESS_HOST=<host>` when you want to force a single ingress host for a one-off run.
 Use task probe:app:external and task probe:web:external to verify the ingress path from the host.
 The default repo validation paths now run the browser flow as well:
