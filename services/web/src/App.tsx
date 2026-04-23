@@ -22,6 +22,7 @@ import {
   WorkspaceAccess,
   WorkspaceShare,
 } from "./app/types";
+import { buildWorkspacePath, readWorkspaceIdFromPath } from "./app/workspaceRouting";
 import { AuthShell } from "./features/auth/AuthShell";
 import { LoginView } from "./features/auth/LoginView";
 import { PasswordSetupView } from "./features/auth/PasswordSetupView";
@@ -30,6 +31,8 @@ import { WorkspaceHeader } from "./features/workspaces/WorkspaceHeader";
 import { WorkspaceRail } from "./features/workspaces/WorkspaceRail";
 import { WorkspaceSettingsView } from "./features/workspaces/WorkspaceSettingsView";
 import { WorkspaceView } from "./features/workspaces/WorkspaceView";
+
+type HistoryMode = "push" | "replace";
 
 function readInitialAuthError() {
   if (typeof window === "undefined") {
@@ -55,6 +58,36 @@ function resetTransientWorkspaceState() {
   };
 }
 
+function readSelectedWorkspaceIdFromLocation() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return readWorkspaceIdFromPath(window.location.pathname);
+}
+
+function updateWorkspaceLocation(workspaceId: string, mode: HistoryMode) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const nextPath = buildWorkspacePath(workspaceId);
+
+  if (window.location.pathname === nextPath) {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  url.pathname = nextPath;
+
+  if (mode === "push") {
+    window.history.pushState({}, document.title, url);
+    return;
+  }
+
+  window.history.replaceState({}, document.title, url);
+}
+
 export default function App() {
   const [sessionState, setSessionState] = useState<SessionState>(UNAUTHENTICATED_SESSION);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -65,7 +98,9 @@ export default function App() {
   const [resetNewPassword, setResetNewPassword] = useState("");
   const [resetError, setResetError] = useState<string | null>(null);
   const [isSubmittingPasswordReset, setIsSubmittingPasswordReset] = useState(false);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() =>
+    readSelectedWorkspaceIdFromLocation(),
+  );
   const [isWorkspaceSettingsOpen, setIsWorkspaceSettingsOpen] = useState(false);
   const [isDesktopSidebarExpanded, setIsDesktopSidebarExpanded] = useState(false);
   const [isMobileAppDrawerOpen, setIsMobileAppDrawerOpen] = useState(false);
@@ -112,10 +147,7 @@ export default function App() {
     [currentWorkspace?.ownerEmail, shares],
   );
 
-  const remainingCount = useMemo(
-    () => todos.filter((todo) => !todo.completed).length,
-    [todos],
-  );
+  const remainingCount = useMemo(() => todos.filter((todo) => !todo.completed).length, [todos]);
   const completedCount = todos.length - remainingCount;
   const canManageCurrentWorkspace = currentWorkspace?.role === "owner";
 
@@ -128,6 +160,35 @@ export default function App() {
     url.searchParams.delete("authError");
     window.history.replaceState({}, document.title, url.toString());
   }, [initialAuthError]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    function handlePopState() {
+      setSelectedWorkspaceId(readSelectedWorkspaceIdFromLocation());
+      setIsWorkspaceSettingsOpen(false);
+      setWorkspaceError(null);
+      setShareEmail("");
+      setShareError(null);
+      setShareSuccess(null);
+      setCollaboratorMenuAnchorEl(null);
+      setRemovingCollaboratorEmails([]);
+      setTodoError(null);
+      setDraftTodoTitle("");
+      setIsAddingTodoInline(false);
+      setCreateWorkspaceAnchorEl(null);
+      setCreateWorkspaceError(null);
+      setWorkspaceManageError(null);
+    }
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
 
   function applySessionState(nextSession: SessionState) {
     setSessionState(nextSession);
@@ -158,6 +219,7 @@ export default function App() {
     setWorkspaceManageError(null);
     setDeletingWorkspaceId(null);
     setSelectedWorkspaceId("");
+    updateWorkspaceLocation("", "replace");
     setLoginError(initialAuthError);
   }
 
@@ -189,7 +251,9 @@ export default function App() {
           return;
         }
         setSessionState(UNAUTHENTICATED_SESSION);
-        setLoginError(error instanceof Error ? error.message : "Unable to load the current session.");
+        setLoginError(
+          error instanceof Error ? error.message : "Unable to load the current session.",
+        );
       } finally {
         if (isActive) {
           setIsBootstrapping(false);
@@ -203,20 +267,31 @@ export default function App() {
   }, [initialAuthError]);
 
   useEffect(() => {
+    if (isBootstrapping || !sessionState.authenticated) {
+      return;
+    }
+
     if (accessibleWorkspaces.length === 0) {
       if (selectedWorkspaceId !== "") {
         setSelectedWorkspaceId("");
       }
+      updateWorkspaceLocation("", "replace");
       return;
     }
 
     if (!accessibleWorkspaces.some((workspace) => workspace.id === selectedWorkspaceId)) {
-      setSelectedWorkspaceId(accessibleWorkspaces[0].id);
+      const fallbackWorkspaceId = accessibleWorkspaces[0].id;
+      setSelectedWorkspaceId(fallbackWorkspaceId);
+      updateWorkspaceLocation(fallbackWorkspaceId, "replace");
     }
-  }, [accessibleWorkspaces, selectedWorkspaceId]);
+  }, [accessibleWorkspaces, isBootstrapping, selectedWorkspaceId, sessionState.authenticated]);
 
   useEffect(() => {
-    if (!sessionState.authenticated || sessionState.user?.passwordResetRequired || !selectedWorkspaceId) {
+    if (
+      !sessionState.authenticated ||
+      sessionState.user?.passwordResetRequired ||
+      !selectedWorkspaceId
+    ) {
       setTodos([]);
       setShares([]);
       setIsWorkspaceLoading(false);
@@ -256,7 +331,9 @@ export default function App() {
         if (!isActive) {
           return;
         }
-        setWorkspaceError(error instanceof Error ? error.message : "Unable to load workspace data.");
+        setWorkspaceError(
+          error instanceof Error ? error.message : "Unable to load workspace data.",
+        );
         setTodos([]);
         setShares([]);
       } finally {
@@ -273,6 +350,7 @@ export default function App() {
 
   function handleWorkspaceChange(workspaceId: string) {
     setSelectedWorkspaceId(workspaceId);
+    updateWorkspaceLocation(workspaceId, "push");
     setIsWorkspaceSettingsOpen(false);
     setWorkspaceError(null);
     setShareEmail("");
@@ -394,7 +472,9 @@ export default function App() {
       setIsWorkspaceSettingsOpen(false);
       await loadSession().catch((error) => {
         setSessionState(UNAUTHENTICATED_SESSION);
-        setLoginError(error instanceof Error ? error.message : "Unable to load the current session.");
+        setLoginError(
+          error instanceof Error ? error.message : "Unable to load the current session.",
+        );
       });
     }
   }
@@ -440,6 +520,7 @@ export default function App() {
         accessibleWorkspaces: [...(current.accessibleWorkspaces ?? []), createdWorkspace],
       }));
       setSelectedWorkspaceId(createdWorkspace.id);
+      updateWorkspaceLocation(createdWorkspace.id, "push");
       setIsWorkspaceSettingsOpen(false);
       setWorkspaceSuccess(`Created ${createdWorkspace.name}.`);
       setCreateWorkspaceAnchorEl(null);
@@ -482,7 +563,9 @@ export default function App() {
         ...current,
         accessibleWorkspaces: nextWorkspaces,
       }));
-      setSelectedWorkspaceId(nextWorkspaces[0]?.id ?? "");
+      const nextWorkspaceId = nextWorkspaces[0]?.id ?? "";
+      setSelectedWorkspaceId(nextWorkspaceId);
+      updateWorkspaceLocation(nextWorkspaceId, "replace");
       setIsWorkspaceSettingsOpen(false);
       setWorkspaceSuccess(`Deleted ${deletedWorkspace.name}.`);
       setCollaboratorMenuAnchorEl(null);
@@ -529,7 +612,8 @@ export default function App() {
         if (
           current.some(
             (existingShare) =>
-              existingShare.workspaceId === share.workspaceId && existingShare.email === share.email,
+              existingShare.workspaceId === share.workspaceId &&
+              existingShare.email === share.email,
           )
         ) {
           return current;
@@ -580,7 +664,9 @@ export default function App() {
           ...current,
           accessibleWorkspaces: nextWorkspaces,
         }));
-        setSelectedWorkspaceId(nextWorkspaces[0]?.id ?? "");
+        const nextWorkspaceId = nextWorkspaces[0]?.id ?? "";
+        setSelectedWorkspaceId(nextWorkspaceId);
+        updateWorkspaceLocation(nextWorkspaceId, "replace");
         setCollaboratorMenuAnchorEl(null);
         setShares([]);
         setTodos([]);

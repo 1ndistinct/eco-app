@@ -2,15 +2,7 @@ import { FormEvent } from "react";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import DoneRoundedIcon from "@mui/icons-material/DoneRounded";
-import {
-  Alert,
-  Box,
-  CircularProgress,
-  Paper,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, CircularProgress, Paper, Stack, TextField, Typography } from "@mui/material";
 
 import { Todo, WorkspaceAccess } from "../../app/types";
 import { AppButton } from "../../components/ui";
@@ -67,7 +59,7 @@ export function TodosPanel({
         borderRadius: { xs: "var(--surface-radius)", md: "var(--surface-radius-lg)" },
       }}
     >
-      <Stack spacing={2}>
+      <Stack spacing={2} className="workspace-panel-content">
         <Stack
           direction={{ xs: "column", md: "row" }}
           spacing={1.5}
@@ -148,7 +140,9 @@ export function TodosPanel({
           </Stack>
         ) : null}
 
-        {!isWorkspaceLoading && workspaceError ? <Alert severity="error">{workspaceError}</Alert> : null}
+        {!isWorkspaceLoading && workspaceError ? (
+          <Alert severity="error">{workspaceError}</Alert>
+        ) : null}
 
         {!isWorkspaceLoading && !workspaceError && todos.length === 0 && !isAddingTodoInline ? (
           <Paper elevation={0} className="empty-state">
@@ -162,76 +156,76 @@ export function TodosPanel({
         ) : null}
 
         {!isWorkspaceLoading && !workspaceError && todos.length > 0 ? (
-          <Box component="ul" className="todo-list" aria-label="Todo items">
-            {todos.map((todo) => {
-              const isUpdating = updatingTodoIds.includes(todo.id);
-              const isDeleting = deletingTodoIds.includes(todo.id);
-              const isMutating = isUpdating || isDeleting;
-              const ownerLabel =
-                todo.ownerEmail === currentUserEmail
-                  ? "Owned by you"
-                  : `Owned by ${todo.ownerEmail}`;
-              const statusLabel = todo.completed ? "Completed" : "Open";
+          <Box className="todo-list-scrollbox">
+            <Box component="ul" className="todo-list" aria-label="Todo items">
+              {todos.map((todo) => {
+                const isUpdating = updatingTodoIds.includes(todo.id);
+                const isDeleting = deletingTodoIds.includes(todo.id);
+                const isMutating = isUpdating || isDeleting;
+                const ownerLabel =
+                  todo.ownerEmail === currentUserEmail
+                    ? "Owned by you"
+                    : `Owned by ${todo.ownerEmail}`;
+                const statusLabel = todo.completed ? "Completed" : "Open";
 
-              return (
-                <Paper
-                  key={todo.id}
-                  component="li"
-                  elevation={0}
-                  className={`todo-row${todo.completed ? " todo-row-done" : ""}`}
-                  sx={{ opacity: isMutating ? 0.7 : 1 }}
-                >
-                  <Stack
-                    direction={{ xs: "column", md: "row" }}
-                    spacing={1.5}
-                    sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}
+                return (
+                  <Paper
+                    key={todo.id}
+                    component="li"
+                    elevation={0}
+                    className={`todo-row${todo.completed ? " todo-row-done" : ""}`}
+                    sx={{ opacity: isMutating ? 0.7 : 1 }}
                   >
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography
-                        variant="subtitle1"
-                        className={todo.completed ? "todo-title-done" : undefined}
-                      >
-                        {todo.title}
-                      </Typography>
-                      <Typography color="text.secondary">
-                        {ownerLabel} · {statusLabel}
-                      </Typography>
-                    </Box>
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={1.5}
+                      sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography
+                          variant="subtitle1"
+                          className={todo.completed ? "todo-title-done" : undefined}
+                        >
+                          {todo.title}
+                        </Typography>
+                        <Typography color="text.secondary">
+                          {ownerLabel} · {statusLabel}
+                        </Typography>
+                      </Box>
 
-                    <Stack direction="row" spacing={1} className="todo-actions">
-                      <AppButton
-                        variant={todo.completed ? "outlined" : "contained"}
-                        color={todo.completed ? "inherit" : "success"}
-                        disabled={isMutating}
-                        onClick={() => onToggleTodo(todo)}
-                      >
-                        {isUpdating
-                          ? "Saving..."
-                          : todo.completed
-                          ? "Reopen"
-                          : "Mark done"}
-                      </AppButton>
-                      <AppButton
-                        variant="text"
-                        color="error"
-                        disabled={isMutating}
-                        onClick={() => onDeleteTodo(todo)}
-                        aria-label={isDeleting ? `Deleting ${todo.title}` : `Delete ${todo.title}`}
-                        startIcon={
-                          isDeleting ? (
-                            <CircularProgress size={16} color="inherit" />
-                          ) : (
-                            <DeleteOutlineRoundedIcon />
-                          )
-                        }
-                      >
-                        {isDeleting ? "Deleting..." : "Delete"}
-                      </AppButton>
+                      <Stack direction="row" spacing={1} className="todo-actions">
+                        <AppButton
+                          variant={todo.completed ? "outlined" : "contained"}
+                          color={todo.completed ? "inherit" : "success"}
+                          disabled={isMutating}
+                          onClick={() => onToggleTodo(todo)}
+                        >
+                          {isUpdating ? "Saving..." : todo.completed ? "Reopen" : "Mark done"}
+                        </AppButton>
+                        <AppButton
+                          variant="text"
+                          color="error"
+                          disabled={isMutating}
+                          onClick={() => onDeleteTodo(todo)}
+                          aria-label={
+                            isDeleting ? `Deleting ${todo.title}` : `Delete ${todo.title}`
+                          }
+                          startIcon={
+                            isDeleting ? (
+                              <CircularProgress size={16} color="inherit" />
+                            ) : (
+                              <DeleteOutlineRoundedIcon />
+                            )
+                          }
+                        >
+                          {isDeleting ? "Deleting..." : "Delete"}
+                        </AppButton>
+                      </Stack>
                     </Stack>
-                  </Stack>
-                </Paper>
-              );
-            })}
+                  </Paper>
+                );
+              })}
+            </Box>
           </Box>
         ) : null}
       </Stack>

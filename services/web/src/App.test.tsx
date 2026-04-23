@@ -22,11 +22,22 @@ function authenticatedSession(passwordResetRequired = false) {
   };
 }
 
-function workspaceItemsResponse(items: object[] = []) {
+function authenticatedSessionWithWorkspaces(workspaces: object[], passwordResetRequired = false) {
+  return {
+    authenticated: true,
+    user: {
+      email: "owner@example.com",
+      passwordResetRequired,
+    },
+    accessibleWorkspaces: workspaces,
+  };
+}
+
+function workspaceItemsResponse(items: object[] = [], workspaceId = "workspace-1") {
   return new Response(
     JSON.stringify({
       items,
-      workspaceId: "workspace-1",
+      workspaceId,
     }),
     {
       status: 200,
@@ -58,6 +69,7 @@ describe("App", () => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     setMatchMedia(false);
+    window.history.replaceState({}, "", "/");
   });
 
   afterEach(() => {
@@ -97,10 +109,7 @@ describe("App", () => {
     render(<App />);
 
     const googleLink = await screen.findByRole("link", { name: /continue with google/i });
-    expect(googleLink).toHaveAttribute(
-      "href",
-      "https://eco.treehousehl.com/api/auth/google/start",
-    );
+    expect(googleLink).toHaveAttribute("href", "https://eco.treehousehl.com/api/auth/google/start");
   });
 
   it("logs in and loads the selected workspace", async () => {
@@ -165,6 +174,7 @@ describe("App", () => {
     expect(screen.getByRole("combobox")).toHaveTextContent("Personal · owner@example.com");
     expect(screen.getByText(/signed in as/i)).toBeInTheDocument();
     expect(screen.getByText(/^owner@example\.com$/i)).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/workspaces/workspace-1");
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(4);
@@ -172,6 +182,51 @@ describe("App", () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/auth/login");
     expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/todos?workspace=workspace-1");
     expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/shares?workspace=workspace-1");
+  });
+
+  it("loads the workspace selected in the URL path on refresh", async () => {
+    window.history.replaceState({}, "", "/workspaces/workspace-2");
+
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            authenticatedSessionWithWorkspaces([
+              {
+                id: "workspace-1",
+                name: "Personal",
+                description: "Default workspace",
+                ownerEmail: "owner@example.com",
+                role: "owner",
+              },
+              {
+                id: "workspace-2",
+                name: "Launch Queue",
+                description: "Track rollout work.",
+                ownerEmail: "owner@example.com",
+                role: "owner",
+              },
+            ]),
+          ),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(workspaceItemsResponse([], "workspace-2"))
+      .mockResolvedValueOnce(workspaceItemsResponse([], "workspace-2"));
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /open workspace selector/i }));
+    expect(await screen.findByRole("combobox")).toHaveTextContent(
+      "Launch Queue · owner@example.com",
+    );
+    expect(window.location.pathname).toBe("/workspaces/workspace-2");
+
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/todos?workspace=workspace-2");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/shares?workspace=workspace-2");
   });
 
   it("forces a password reset before workspace data loads", async () => {
@@ -302,10 +357,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: /log out/i }));
 
     const googleLink = await screen.findByRole("link", { name: /continue with google/i });
-    expect(googleLink).toHaveAttribute(
-      "href",
-      "https://eco.treehousehl.com/api/auth/google/start",
-    );
+    expect(googleLink).toHaveAttribute("href", "https://eco.treehousehl.com/api/auth/google/start");
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", { method: "POST" });
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/session");
     expect(sessionRequestCount).toBe(2);
@@ -510,7 +562,9 @@ describe("App", () => {
 
     expect(await screen.findByText("collab@example.com")).toBeInTheDocument();
     expect(screen.getByText("Owner")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /remove owner@example.com/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /remove owner@example.com/i }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /remove collab@example.com/i }));
 
@@ -646,6 +700,7 @@ describe("App", () => {
       expect(screen.queryByLabelText(/workspace name/i)).not.toBeInTheDocument();
     });
     expect(screen.getByRole("combobox")).toHaveTextContent("Launch Queue · owner@example.com");
+    expect(window.location.pathname).toBe("/workspaces/workspace-2");
 
     fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -656,6 +711,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
+    expect(window.location.pathname).toBe("/workspaces/workspace-1");
 
     expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/workspaces");
     expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
@@ -671,6 +727,56 @@ describe("App", () => {
     expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({
       method: "DELETE",
     });
+  });
+
+  it("updates the URL when switching workspaces", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify(
+            authenticatedSessionWithWorkspaces([
+              {
+                id: "workspace-1",
+                name: "Personal",
+                description: "Default workspace",
+                ownerEmail: "owner@example.com",
+                role: "owner",
+              },
+              {
+                id: "workspace-2",
+                name: "Launch Queue",
+                description: "Track rollout work.",
+                ownerEmail: "owner@example.com",
+                role: "owner",
+              },
+            ]),
+          ),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(workspaceItemsResponse())
+      .mockResolvedValueOnce(workspaceItemsResponse())
+      .mockResolvedValueOnce(workspaceItemsResponse([], "workspace-2"))
+      .mockResolvedValueOnce(workspaceItemsResponse([], "workspace-2"));
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /open workspace selector/i }));
+
+    const workspaceSelect = await screen.findByRole("combobox");
+    fireEvent.mouseDown(workspaceSelect);
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Launch Queue · owner@example.com" }),
+    );
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/workspaces/workspace-2");
+    });
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/todos?workspace=workspace-2");
+    expect(fetchMock.mock.calls[4]?.[0]).toBe("/api/shares?workspace=workspace-2");
   });
 
   it("keeps desktop navigation collapsed by default and opens the workspace selector on demand", async () => {
@@ -696,16 +802,24 @@ describe("App", () => {
 
     expect(selectorButton).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    expect(createWorkspaceButton.compareDocumentPosition(todosButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(collaboratorsButton.compareDocumentPosition(todosButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(todosButton.compareDocumentPosition(settingsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      createWorkspaceButton.compareDocumentPosition(todosButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      collaboratorsButton.compareDocumentPosition(todosButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      todosButton.compareDocumentPosition(settingsButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByRole("button", { name: /open todos app/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /open app drawer/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Default workspace")).not.toBeInTheDocument();
 
     fireEvent.click(selectorButton);
 
-    expect(screen.getByRole("button", { name: /collapse workspace selector/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /collapse workspace selector/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveTextContent("Personal · owner@example.com");
   });
 
