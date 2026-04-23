@@ -346,8 +346,8 @@ func TestGoogleLoginCallbackCreatesSessionForExistingVerifiedUser(t *testing.T) 
 	if state.User == nil || state.User.Email != "owner@gmail.com" {
 		t.Fatalf("unexpected session user: %+v", state.User)
 	}
-	if state.User.PasswordResetRequired {
-		t.Fatalf("expected google login to clear password reset requirement")
+	if !state.User.PasswordResetRequired {
+		t.Fatalf("expected google login to preserve password reset requirement")
 	}
 }
 

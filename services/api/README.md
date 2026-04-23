@@ -197,7 +197,8 @@ Todos are scoped to a workspace owned by a user. Each todo keeps both:
 - Provisioned users will log in once, then immediately complete the password reset flow before any todo or share actions are allowed.
 - Google login is available only when the backend reports `googleLoginEnabled: true`.
 - Google login only succeeds for a verified Gmail address that exactly matches an existing provisioned user.
-- A successful Google login also clears the initial password-reset requirement for that user.
+- A successful Google login authenticates the user but does not clear the initial password-reset requirement.
+- Provisioned users who sign in with Google first still land in the password reset flow before todo or share actions are allowed.
 - Todos and sessions are stored in Postgres.
 - Passwords are stored as hashes only.
 - Schema changes are managed with embedded goose migrations.

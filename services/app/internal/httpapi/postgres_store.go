@@ -58,21 +58,6 @@ func (s *PostgresStore) AuthenticateGoogleUser(ctx context.Context, email string
 		return SessionUser{}, err
 	}
 
-	if user.PasswordResetRequired {
-		query, args, err := s.builder.
-			Update("users").
-			Set("password_reset_required", false).
-			Where(sq.Eq{"email": normalizedEmail}).
-			ToSql()
-		if err != nil {
-			return SessionUser{}, err
-		}
-		if _, err := s.db.ExecContext(ctx, query, args...); err != nil {
-			return SessionUser{}, err
-		}
-		user.PasswordResetRequired = false
-	}
-
 	return SessionUser{
 		Email:                 user.Email,
 		PasswordResetRequired: user.PasswordResetRequired,

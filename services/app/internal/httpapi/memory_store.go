@@ -89,11 +89,6 @@ func (s *memoryStore) AuthenticateGoogleUser(_ context.Context, email string) (S
 		return SessionUser{}, ErrUserNotFound
 	}
 
-	if user.passwordResetRequired {
-		user.passwordResetRequired = false
-		s.users[user.email] = user
-	}
-
 	return SessionUser{
 		Email:                 user.email,
 		PasswordResetRequired: user.passwordResetRequired,
