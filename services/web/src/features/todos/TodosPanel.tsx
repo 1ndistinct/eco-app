@@ -5,7 +5,6 @@ import DoneRoundedIcon from "@mui/icons-material/DoneRounded";
 import {
   Alert,
   Box,
-  Button,
   CircularProgress,
   Paper,
   Stack,
@@ -14,6 +13,7 @@ import {
 } from "@mui/material";
 
 import { Todo, WorkspaceAccess } from "../../app/types";
+import { AppButton } from "../../components/ui";
 
 type TodosPanelProps = {
   currentWorkspace?: WorkspaceAccess;
@@ -62,7 +62,10 @@ export function TodosPanel({
     <Paper
       elevation={0}
       className="soft-panel workspace-panel"
-      sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
+      sx={{
+        p: { xs: 3, md: 3.5 },
+        borderRadius: { xs: "var(--surface-radius)", md: "var(--surface-radius-lg)" },
+      }}
     >
       <Stack spacing={2}>
         <Stack
@@ -78,7 +81,7 @@ export function TodosPanel({
                 : "Select a workspace to use the todos app."}
             </Typography>
           </Box>
-          <Button
+          <AppButton
             variant="outlined"
             color="inherit"
             startIcon={<AddRoundedIcon />}
@@ -86,7 +89,7 @@ export function TodosPanel({
             disabled={isAddingTodoInline || !currentWorkspace}
           >
             Add item
-          </Button>
+          </AppButton>
         </Stack>
 
         {todoError ? <Alert severity="error">{todoError}</Alert> : null}
@@ -108,7 +111,7 @@ export function TodosPanel({
                   fullWidth
                 />
                 <Stack direction="row" spacing={1}>
-                  <Button
+                  <AppButton
                     type="submit"
                     variant="contained"
                     color="primary"
@@ -122,8 +125,8 @@ export function TodosPanel({
                     }
                   >
                     {isSubmittingTodo ? "Saving..." : "Save"}
-                  </Button>
-                  <Button
+                  </AppButton>
+                  <AppButton
                     type="button"
                     variant="text"
                     color="inherit"
@@ -131,7 +134,7 @@ export function TodosPanel({
                     onClick={onCancelInlineTodo}
                   >
                     Cancel
-                  </Button>
+                  </AppButton>
                 </Stack>
               </Stack>
             </Box>
@@ -196,7 +199,7 @@ export function TodosPanel({
                     </Box>
 
                     <Stack direction="row" spacing={1} className="todo-actions">
-                      <Button
+                      <AppButton
                         variant={todo.completed ? "outlined" : "contained"}
                         color={todo.completed ? "inherit" : "success"}
                         disabled={isMutating}
@@ -207,8 +210,8 @@ export function TodosPanel({
                           : todo.completed
                           ? "Reopen"
                           : "Mark done"}
-                      </Button>
-                      <Button
+                      </AppButton>
+                      <AppButton
                         variant="text"
                         color="error"
                         disabled={isMutating}
@@ -223,7 +226,7 @@ export function TodosPanel({
                         }
                       >
                         {isDeleting ? "Deleting..." : "Delete"}
-                      </Button>
+                      </AppButton>
                     </Stack>
                   </Stack>
                 </Paper>

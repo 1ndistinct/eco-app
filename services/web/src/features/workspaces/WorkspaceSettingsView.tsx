@@ -1,121 +1,132 @@
-import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
-import { Button, CircularProgress, Paper, Stack, Typography, Box } from "@mui/material";
+import {
+  Box,
+  CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Paper,
+  Stack,
+  Typography,
+} from "@mui/material";
 
 import { WorkspaceAccess } from "../../app/types";
+import { AppButton, AppIconButton } from "../../components/ui";
 import { formatWorkspaceLabel } from "./workspaceLabels";
 
 type WorkspaceSettingsViewProps = {
+  open: boolean;
   currentWorkspace?: WorkspaceAccess;
   canManageCurrentWorkspace: boolean;
   deletingWorkspaceId: string | null;
-  onBack: () => void;
+  onClose: () => void;
   onDeleteWorkspace: () => void;
 };
 
 export function WorkspaceSettingsView({
+  open,
   currentWorkspace,
   canManageCurrentWorkspace,
   deletingWorkspaceId,
-  onBack,
+  onClose,
   onDeleteWorkspace,
 }: WorkspaceSettingsViewProps) {
-  if (!currentWorkspace) {
-    return (
-      <Paper
-        elevation={0}
-        className="soft-panel workspace-panel"
-        sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
-      >
-        <Typography color="text.secondary">Select a workspace to view settings.</Typography>
-      </Paper>
-    );
-  }
-
   return (
-    <Paper
-      elevation={0}
-      className="soft-panel workspace-panel"
-      sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      aria-labelledby="workspace-settings-title"
     >
-      <Stack spacing={3}>
-        <Button
-          variant="text"
-          color="inherit"
-          startIcon={<ArrowBackRoundedIcon />}
-          onClick={onBack}
-          sx={{ alignSelf: "flex-start" }}
-        >
-          Back
-        </Button>
-
+      <DialogTitle
+        id="workspace-settings-title"
+        sx={{ pb: 1, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}
+      >
         <Box>
-          <Typography variant="h5">Workspace settings</Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-            {formatWorkspaceLabel(currentWorkspace)}
+          <Typography variant="h5" component="span">
+            Workspace settings
           </Typography>
+          {currentWorkspace ? (
+            <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+              {formatWorkspaceLabel(currentWorkspace)}
+            </Typography>
+          ) : null}
         </Box>
 
-        <Stack spacing={1.5}>
-          <Box>
-            <Typography variant="overline" color="text.secondary">
-              Name
-            </Typography>
-            <Typography>{currentWorkspace.name}</Typography>
-          </Box>
-          <Box>
-            <Typography variant="overline" color="text.secondary">
-              Description
-            </Typography>
-            <Typography>{currentWorkspace.description || "No description."}</Typography>
-          </Box>
-          <Box>
-            <Typography variant="overline" color="text.secondary">
-              Owner
-            </Typography>
-            <Typography>{currentWorkspace.ownerEmail}</Typography>
-          </Box>
-          <Box>
-            <Typography variant="overline" color="text.secondary">
-              Access
-            </Typography>
-            <Typography>{currentWorkspace.role}</Typography>
-          </Box>
-        </Stack>
+        <AppIconButton aria-label="Close workspace settings" onClick={onClose}>
+          <CloseRoundedIcon />
+        </AppIconButton>
+      </DialogTitle>
 
-        <Paper elevation={0} className="danger-panel">
-          <Stack spacing={1.5}>
-            <Typography variant="h6">Delete workspace</Typography>
-            <Typography color="text.secondary">
-              This removes the workspace, its collaborators, and all todos inside it.
-            </Typography>
-            {canManageCurrentWorkspace ? (
-              <Button
-                variant="contained"
-                color="error"
-                disabled={deletingWorkspaceId === currentWorkspace.id}
-                onClick={onDeleteWorkspace}
-                startIcon={
-                  deletingWorkspaceId === currentWorkspace.id ? (
-                    <CircularProgress size={18} color="inherit" />
-                  ) : (
-                    <DeleteOutlineRoundedIcon />
-                  )
-                }
-                sx={{ alignSelf: "flex-start" }}
-              >
-                {deletingWorkspaceId === currentWorkspace.id
-                  ? "Deleting..."
-                  : "Delete workspace"}
-              </Button>
-            ) : (
-              <Typography color="text.secondary">
-                Only the owner can delete this workspace.
-              </Typography>
-            )}
+      <DialogContent sx={{ pt: 1, pb: 3 }}>
+        {currentWorkspace ? (
+          <Stack spacing={3}>
+            <Stack spacing={1.5}>
+              <Box>
+                <Typography variant="overline" color="text.secondary">
+                  Name
+                </Typography>
+                <Typography>{currentWorkspace.name}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="overline" color="text.secondary">
+                  Description
+                </Typography>
+                <Typography>{currentWorkspace.description || "No description."}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="overline" color="text.secondary">
+                  Owner
+                </Typography>
+                <Typography>{currentWorkspace.ownerEmail}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="overline" color="text.secondary">
+                  Access
+                </Typography>
+                <Typography>{currentWorkspace.role}</Typography>
+              </Box>
+            </Stack>
+
+            <Paper elevation={0} className="danger-panel">
+              <Stack spacing={1.5}>
+                <Typography variant="h6">Delete workspace</Typography>
+                <Typography color="text.secondary">
+                  This removes the workspace, its collaborators, and all todos inside it.
+                </Typography>
+                {canManageCurrentWorkspace ? (
+                  <AppButton
+                    variant="contained"
+                    color="error"
+                    disabled={deletingWorkspaceId === currentWorkspace.id}
+                    onClick={onDeleteWorkspace}
+                    startIcon={
+                      deletingWorkspaceId === currentWorkspace.id ? (
+                        <CircularProgress size={18} color="inherit" />
+                      ) : (
+                        <DeleteOutlineRoundedIcon />
+                      )
+                    }
+                    sx={{ alignSelf: "flex-start" }}
+                  >
+                    {deletingWorkspaceId === currentWorkspace.id
+                      ? "Deleting..."
+                      : "Delete workspace"}
+                  </AppButton>
+                ) : (
+                  <Typography color="text.secondary">
+                    Only the owner can delete this workspace.
+                  </Typography>
+                )}
+              </Stack>
+            </Paper>
           </Stack>
-        </Paper>
-      </Stack>
-    </Paper>
+        ) : (
+          <Typography color="text.secondary">Select a workspace to view settings.</Typography>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

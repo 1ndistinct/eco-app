@@ -1,24 +1,25 @@
-import { FormEvent } from "react";
+import { FormEvent, ReactElement } from "react";
 import ChecklistRoundedIcon from "@mui/icons-material/ChecklistRounded";
-import MenuOpenRoundedIcon from "@mui/icons-material/MenuOpenRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import {
   Box,
-  Button,
-  IconButton,
+  Drawer,
   Paper,
   Stack,
-  Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
 import { Todo, WorkspaceAccess } from "../../app/types";
+import { AppButton, AppIconButton } from "../../components/ui";
 import { TodosPanel } from "../todos/TodosPanel";
 
 type WorkspaceViewProps = {
   currentWorkspace?: WorkspaceAccess;
   currentUserEmail?: string;
   isSidebarExpanded: boolean;
-  onToggleSidebar: () => void;
+  onCloseSidebar: () => void;
   todos: Todo[];
   remainingCount: number;
   completedCount: number;
@@ -42,7 +43,7 @@ export function WorkspaceView({
   currentWorkspace,
   currentUserEmail,
   isSidebarExpanded,
-  onToggleSidebar,
+  onCloseSidebar,
   todos,
   remainingCount,
   completedCount,
@@ -61,31 +62,22 @@ export function WorkspaceView({
   onToggleTodo,
   onDeleteTodo,
 }: WorkspaceViewProps) {
-  function renderAppButton(label: string, icon: JSX.Element) {
-    if (isSidebarExpanded) {
-      return (
-        <Button
-          fullWidth
-          variant="contained"
-          color="primary"
-          startIcon={icon}
-          sx={{ justifyContent: "flex-start" }}
-        >
-          {label}
-        </Button>
-      );
-    }
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
+  function renderMobileAppButton(label: string, icon: ReactElement) {
     return (
-      <Tooltip title={label} placement="right">
-        <IconButton
-          color="primary"
-          aria-label={`Open ${label.toLowerCase()} app`}
-          className="app-selector-icon app-selector-icon-active"
-        >
-          {icon}
-        </IconButton>
-      </Tooltip>
+      <AppButton
+        fullWidth
+        variant="outlined"
+        color="inherit"
+        startIcon={icon}
+        className="app-selector-button app-selector-item app-selector-item-active"
+        onClick={onCloseSidebar}
+        sx={{ justifyContent: "flex-start" }}
+      >
+        {label}
+      </AppButton>
     );
   }
 
@@ -94,12 +86,15 @@ export function WorkspaceView({
       <Paper
         elevation={0}
         className="soft-panel workspace-panel"
-        sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
+        sx={{
+          p: { xs: 3, md: 3.5 },
+          borderRadius: { xs: "var(--surface-radius)", md: "var(--surface-radius-lg)" },
+        }}
       >
         <Stack spacing={1}>
           <Typography variant="h5">No workspace selected</Typography>
           <Typography color="text.secondary">
-            Choose a workspace in the header or create a new one.
+            Choose a workspace from the picker or create a new one.
           </Typography>
         </Stack>
       </Paper>
@@ -108,51 +103,41 @@ export function WorkspaceView({
 
   return (
     <Box className="workspace-layout">
-      <Paper
-        elevation={0}
-        className={`soft-panel workspace-panel workspace-sidebar${isSidebarExpanded ? " is-expanded" : ""}`}
-        sx={{ p: { xs: 1.5, md: 2 }, borderRadius: { xs: "18px", md: "22px" } }}
-      >
-        <Stack spacing={2}>
-          <Box className="workspace-sidebar-header">
-            <Tooltip title={isSidebarExpanded ? "Collapse apps" : "Expand apps"}>
-              <IconButton
-                color="inherit"
-                aria-label={isSidebarExpanded ? "Collapse app sidebar" : "Expand app sidebar"}
-                onClick={onToggleSidebar}
-              >
-                <MenuOpenRoundedIcon />
-              </IconButton>
-            </Tooltip>
-            {isSidebarExpanded ? (
-              <Typography variant="overline" color="text.secondary">
-                Apps
-              </Typography>
-            ) : null}
-          </Box>
+      {isMobile ? (
+        <Drawer
+          anchor="top"
+          open={isSidebarExpanded}
+          onClose={onCloseSidebar}
+          ModalProps={{ keepMounted: true }}
+          slotProps={{ paper: { className: "workspace-mobile-drawer" } }}
+        >
+          <Box className="workspace-mobile-drawer-shell">
+            <Box className="workspace-mobile-drawer-header">
+              <Box>
+                <Typography variant="overline" color="text.secondary">
+                  Apps
+                </Typography>
+                <Typography variant="h5">Choose a section</Typography>
+              </Box>
 
-          <Stack spacing={1} className="app-selector">
-            {renderAppButton("Todos", <ChecklistRoundedIcon />)}
-          </Stack>
-        </Stack>
-      </Paper>
+              <AppIconButton
+                color="inherit"
+                aria-label="Close app drawer"
+                className="sidebar-toggle-button"
+                onClick={onCloseSidebar}
+              >
+                <CloseRoundedIcon />
+              </AppIconButton>
+            </Box>
+
+            <Stack spacing={1.25} className="app-selector">
+              {renderMobileAppButton("Todos", <ChecklistRoundedIcon />)}
+            </Stack>
+          </Box>
+        </Drawer>
+      ) : null}
 
       <Stack spacing={2.5} className="workspace-main">
-        <Paper
-          elevation={0}
-          className="soft-panel workspace-panel"
-          sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
-        >
-          <Stack spacing={2}>
-            <Box>
-              <Typography variant="h4">{currentWorkspace.name}</Typography>
-              <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-                {currentWorkspace.description || "No description."}
-              </Typography>
-            </Box>
-          </Stack>
-        </Paper>
-
         <TodosPanel
           currentWorkspace={currentWorkspace}
           currentUserEmail={currentUserEmail}

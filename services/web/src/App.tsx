@@ -25,8 +25,9 @@ import {
 import { AuthShell } from "./features/auth/AuthShell";
 import { LoginView } from "./features/auth/LoginView";
 import { PasswordSetupView } from "./features/auth/PasswordSetupView";
-import { CreateWorkspaceDialog } from "./features/workspaces/CreateWorkspaceDialog";
+import { CreateWorkspacePopover } from "./features/workspaces/CreateWorkspacePopover";
 import { WorkspaceHeader } from "./features/workspaces/WorkspaceHeader";
+import { WorkspaceRail } from "./features/workspaces/WorkspaceRail";
 import { WorkspaceSettingsView } from "./features/workspaces/WorkspaceSettingsView";
 import { WorkspaceView } from "./features/workspaces/WorkspaceView";
 
@@ -65,8 +66,9 @@ export default function App() {
   const [resetError, setResetError] = useState<string | null>(null);
   const [isSubmittingPasswordReset, setIsSubmittingPasswordReset] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
-  const [viewMode, setViewMode] = useState<"workspace" | "settings">("workspace");
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [isWorkspaceSettingsOpen, setIsWorkspaceSettingsOpen] = useState(false);
+  const [isDesktopSidebarExpanded, setIsDesktopSidebarExpanded] = useState(false);
+  const [isMobileAppDrawerOpen, setIsMobileAppDrawerOpen] = useState(false);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [shares, setShares] = useState<WorkspaceShare[]>([]);
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
@@ -87,8 +89,9 @@ export default function App() {
   const [deletingTodoIds, setDeletingTodoIds] = useState<string[]>([]);
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDescription, setWorkspaceDescription] = useState("");
-  const [isCreateWorkspaceDialogOpen, setIsCreateWorkspaceDialogOpen] = useState(false);
+  const [createWorkspaceAnchorEl, setCreateWorkspaceAnchorEl] = useState<HTMLElement | null>(null);
   const [isSubmittingWorkspace, setIsSubmittingWorkspace] = useState(false);
+  const [createWorkspaceError, setCreateWorkspaceError] = useState<string | null>(null);
   const [workspaceManageError, setWorkspaceManageError] = useState<string | null>(null);
   const [workspaceSuccess, setWorkspaceSuccess] = useState<string | null>(null);
   const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(null);
@@ -128,7 +131,9 @@ export default function App() {
 
   function applySessionState(nextSession: SessionState) {
     setSessionState(nextSession);
-    setViewMode("workspace");
+    setIsWorkspaceSettingsOpen(false);
+    setCreateWorkspaceAnchorEl(null);
+    setCreateWorkspaceError(null);
 
     if (nextSession.authenticated) {
       setLoginError(null);
@@ -144,7 +149,8 @@ export default function App() {
     setTodoError(clearedState.todoError);
     setIsAddingTodoInline(clearedState.isAddingTodoInline);
     setDraftTodoTitle(clearedState.draftTodoTitle);
-    setIsSidebarExpanded(false);
+    setIsDesktopSidebarExpanded(false);
+    setIsMobileAppDrawerOpen(false);
     setShareEmail("");
     setCollaboratorMenuAnchorEl(null);
     setRemovingCollaboratorEmails([]);
@@ -267,7 +273,7 @@ export default function App() {
 
   function handleWorkspaceChange(workspaceId: string) {
     setSelectedWorkspaceId(workspaceId);
-    setViewMode("workspace");
+    setIsWorkspaceSettingsOpen(false);
     setWorkspaceError(null);
     setShareEmail("");
     setShareError(null);
@@ -277,22 +283,29 @@ export default function App() {
     setTodoError(null);
     setDraftTodoTitle("");
     setIsAddingTodoInline(false);
+    setCreateWorkspaceAnchorEl(null);
+    setCreateWorkspaceError(null);
     setWorkspaceManageError(null);
   }
 
-  function openCreateWorkspaceDialog() {
+  function handleOpenCreateWorkspace(event: MouseEvent<HTMLElement>) {
+    setCollaboratorMenuAnchorEl(null);
+    setShareError(null);
+    setShareSuccess(null);
+    setCreateWorkspaceError(null);
     setWorkspaceManageError(null);
     setWorkspaceSuccess(null);
     resetCreateWorkspaceForm();
-    setIsCreateWorkspaceDialogOpen(true);
+    setCreateWorkspaceAnchorEl(event.currentTarget);
   }
 
-  function closeCreateWorkspaceDialog() {
+  function handleCloseCreateWorkspace() {
     if (isSubmittingWorkspace) {
       return;
     }
 
-    setIsCreateWorkspaceDialogOpen(false);
+    setCreateWorkspaceAnchorEl(null);
+    setCreateWorkspaceError(null);
     resetCreateWorkspaceForm();
   }
 
@@ -365,6 +378,8 @@ export default function App() {
     setWorkspaceManageError(null);
     setWorkspaceSuccess(null);
     setCollaboratorMenuAnchorEl(null);
+    setCreateWorkspaceAnchorEl(null);
+    setCreateWorkspaceError(null);
     setRemovingCollaboratorEmails([]);
     setShareError(null);
     setShareSuccess(null);
@@ -376,7 +391,7 @@ export default function App() {
     } finally {
       setLoginPassword("");
       setResetNewPassword("");
-      setViewMode("workspace");
+      setIsWorkspaceSettingsOpen(false);
       await loadSession().catch((error) => {
         setSessionState(UNAUTHENTICATED_SESSION);
         setLoginError(error instanceof Error ? error.message : "Unable to load the current session.");
@@ -390,12 +405,12 @@ export default function App() {
     const trimmedDescription = workspaceDescription.trim();
 
     if (trimmedName === "") {
-      setWorkspaceManageError("Workspace name is required.");
+      setCreateWorkspaceError("Workspace name is required.");
       return;
     }
 
     setIsSubmittingWorkspace(true);
-    setWorkspaceManageError(null);
+    setCreateWorkspaceError(null);
     setWorkspaceSuccess(null);
 
     try {
@@ -425,12 +440,12 @@ export default function App() {
         accessibleWorkspaces: [...(current.accessibleWorkspaces ?? []), createdWorkspace],
       }));
       setSelectedWorkspaceId(createdWorkspace.id);
-      setViewMode("workspace");
+      setIsWorkspaceSettingsOpen(false);
       setWorkspaceSuccess(`Created ${createdWorkspace.name}.`);
-      setIsCreateWorkspaceDialogOpen(false);
+      setCreateWorkspaceAnchorEl(null);
       resetCreateWorkspaceForm();
     } catch (error) {
-      setWorkspaceManageError(
+      setCreateWorkspaceError(
         error instanceof Error ? error.message : "Unable to create workspace.",
       );
     } finally {
@@ -446,6 +461,8 @@ export default function App() {
     setDeletingWorkspaceId(currentWorkspace.id);
     setWorkspaceManageError(null);
     setWorkspaceSuccess(null);
+    setCreateWorkspaceAnchorEl(null);
+    setCreateWorkspaceError(null);
 
     try {
       const response = await fetch(`${WORKSPACE_ENDPOINT}/${currentWorkspace.id}`, {
@@ -466,7 +483,7 @@ export default function App() {
         accessibleWorkspaces: nextWorkspaces,
       }));
       setSelectedWorkspaceId(nextWorkspaces[0]?.id ?? "");
-      setViewMode("workspace");
+      setIsWorkspaceSettingsOpen(false);
       setWorkspaceSuccess(`Deleted ${deletedWorkspace.name}.`);
       setCollaboratorMenuAnchorEl(null);
       setRemovingCollaboratorEmails([]);
@@ -578,6 +595,8 @@ export default function App() {
   function handleOpenCollaborators(event: MouseEvent<HTMLElement>) {
     setShareError(null);
     setShareSuccess(null);
+    setCreateWorkspaceAnchorEl(null);
+    setCreateWorkspaceError(null);
     setCollaboratorMenuAnchorEl(event.currentTarget);
   }
 
@@ -681,7 +700,10 @@ export default function App() {
           <Paper
             elevation={0}
             className="soft-panel auth-panel"
-            sx={{ p: { xs: 3, md: 4 }, borderRadius: { xs: "18px", md: "22px" } }}
+            sx={{
+              p: { xs: 3, md: 4 },
+              borderRadius: { xs: "var(--surface-radius)", md: "var(--surface-radius-lg)" },
+            }}
           >
             <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
               <CircularProgress size={20} />
@@ -738,6 +760,36 @@ export default function App() {
   return (
     <Box component="main" className="app-shell app-shell-auth">
       <Box className="workspace-shell">
+        <Box className="workspace-rail-shell">
+          <WorkspaceRail
+            currentUserEmail={sessionState.user?.email}
+            accessibleWorkspaces={accessibleWorkspaces}
+            selectedWorkspace={selectedWorkspaceId}
+            currentWorkspace={currentWorkspace}
+            collaboratorCount={collaboratorEmails.length}
+            collaboratorMenuAnchorEl={collaboratorMenuAnchorEl}
+            isCollaboratorMenuOpen={Boolean(collaboratorMenuAnchorEl)}
+            collaboratorEmails={collaboratorEmails}
+            shareEmail={shareEmail}
+            isSubmittingShare={isSubmittingShare}
+            shareError={shareError}
+            shareSuccess={shareSuccess}
+            removingCollaboratorEmails={removingCollaboratorEmails}
+            isWorkspaceSettingsOpen={isWorkspaceSettingsOpen}
+            isSidebarExpanded={isDesktopSidebarExpanded}
+            onWorkspaceChange={handleWorkspaceChange}
+            onOpenCreateWorkspace={handleOpenCreateWorkspace}
+            onOpenCollaborators={handleOpenCollaborators}
+            onCloseCollaborators={handleCloseCollaborators}
+            onShareEmailChange={setShareEmail}
+            onShareWorkspace={handleShareWorkspace}
+            onRemoveCollaborator={handleRemoveCollaborator}
+            onToggleSidebar={() => setIsDesktopSidebarExpanded((current) => !current)}
+            onToggleSettings={() => setIsWorkspaceSettingsOpen((current) => !current)}
+            onLogout={handleLogout}
+          />
+        </Box>
+
         <Box className="workspace-header-shell">
           <WorkspaceHeader
             currentUserEmail={sessionState.user?.email}
@@ -753,17 +805,17 @@ export default function App() {
             shareError={shareError}
             shareSuccess={shareSuccess}
             removingCollaboratorEmails={removingCollaboratorEmails}
-            viewMode={viewMode}
+            isWorkspaceSettingsOpen={isWorkspaceSettingsOpen}
+            isSidebarExpanded={isMobileAppDrawerOpen}
             onWorkspaceChange={handleWorkspaceChange}
-            onOpenCreateWorkspace={openCreateWorkspaceDialog}
+            onOpenCreateWorkspace={handleOpenCreateWorkspace}
             onOpenCollaborators={handleOpenCollaborators}
             onCloseCollaborators={handleCloseCollaborators}
             onShareEmailChange={setShareEmail}
             onShareWorkspace={handleShareWorkspace}
             onRemoveCollaborator={handleRemoveCollaborator}
-            onToggleSettings={() =>
-              setViewMode((current) => (current === "workspace" ? "settings" : "workspace"))
-            }
+            onToggleSidebar={() => setIsMobileAppDrawerOpen((current) => !current)}
+            onToggleSettings={() => setIsWorkspaceSettingsOpen((current) => !current)}
             onLogout={handleLogout}
           />
         </Box>
@@ -774,64 +826,63 @@ export default function App() {
               {workspaceManageError ? <Alert severity="error">{workspaceManageError}</Alert> : null}
               {workspaceSuccess ? <Alert severity="success">{workspaceSuccess}</Alert> : null}
 
-              <Box
-                className={`workspace-screen${viewMode === "settings" ? " workspace-screen-scroll" : ""}`}
-              >
-                {viewMode === "settings" ? (
-                  <WorkspaceSettingsView
-                    currentWorkspace={currentWorkspace}
-                    canManageCurrentWorkspace={canManageCurrentWorkspace}
-                    deletingWorkspaceId={deletingWorkspaceId}
-                    onBack={() => setViewMode("workspace")}
-                    onDeleteWorkspace={handleDeleteWorkspace}
-                  />
-                ) : (
-                  <WorkspaceView
-                    currentWorkspace={currentWorkspace}
-                    currentUserEmail={sessionState.user?.email}
-                    isSidebarExpanded={isSidebarExpanded}
-                    onToggleSidebar={() => setIsSidebarExpanded((current) => !current)}
-                    todos={todos}
-                    remainingCount={remainingCount}
-                    completedCount={completedCount}
-                    isWorkspaceLoading={isWorkspaceLoading}
-                    workspaceError={workspaceError}
-                    todoError={todoError}
-                    isAddingTodoInline={isAddingTodoInline}
-                    draftTodoTitle={draftTodoTitle}
-                    isSubmittingTodo={isSubmittingTodo}
-                    updatingTodoIds={updatingTodoIds}
-                    deletingTodoIds={deletingTodoIds}
-                    onStartInlineTodo={() => {
-                      setIsAddingTodoInline(true);
-                      setTodoError(null);
-                    }}
-                    onDraftTodoTitleChange={setDraftTodoTitle}
-                    onSubmitTodo={handleSubmitTodo}
-                    onCancelInlineTodo={() => {
-                      if (isSubmittingTodo) {
-                        return;
-                      }
-                      setDraftTodoTitle("");
-                      setTodoError(null);
-                      setIsAddingTodoInline(false);
-                    }}
-                    onToggleTodo={handleToggleTodo}
-                    onDeleteTodo={handleDeleteTodo}
-                  />
-                )}
+              <Box className="workspace-screen">
+                <WorkspaceView
+                  currentWorkspace={currentWorkspace}
+                  currentUserEmail={sessionState.user?.email}
+                  isSidebarExpanded={isMobileAppDrawerOpen}
+                  onCloseSidebar={() => setIsMobileAppDrawerOpen(false)}
+                  todos={todos}
+                  remainingCount={remainingCount}
+                  completedCount={completedCount}
+                  isWorkspaceLoading={isWorkspaceLoading}
+                  workspaceError={workspaceError}
+                  todoError={todoError}
+                  isAddingTodoInline={isAddingTodoInline}
+                  draftTodoTitle={draftTodoTitle}
+                  isSubmittingTodo={isSubmittingTodo}
+                  updatingTodoIds={updatingTodoIds}
+                  deletingTodoIds={deletingTodoIds}
+                  onStartInlineTodo={() => {
+                    setIsAddingTodoInline(true);
+                    setTodoError(null);
+                  }}
+                  onDraftTodoTitleChange={setDraftTodoTitle}
+                  onSubmitTodo={handleSubmitTodo}
+                  onCancelInlineTodo={() => {
+                    if (isSubmittingTodo) {
+                      return;
+                    }
+                    setDraftTodoTitle("");
+                    setTodoError(null);
+                    setIsAddingTodoInline(false);
+                  }}
+                  onToggleTodo={handleToggleTodo}
+                  onDeleteTodo={handleDeleteTodo}
+                />
               </Box>
             </Stack>
           </Box>
         </Box>
       </Box>
 
-      <CreateWorkspaceDialog
-        open={isCreateWorkspaceDialogOpen}
+      <WorkspaceSettingsView
+        open={isWorkspaceSettingsOpen}
+        currentWorkspace={currentWorkspace}
+        canManageCurrentWorkspace={canManageCurrentWorkspace}
+        deletingWorkspaceId={deletingWorkspaceId}
+        onClose={() => setIsWorkspaceSettingsOpen(false)}
+        onDeleteWorkspace={handleDeleteWorkspace}
+      />
+
+      <CreateWorkspacePopover
+        anchorEl={createWorkspaceAnchorEl}
+        open={Boolean(createWorkspaceAnchorEl)}
         workspaceName={workspaceName}
         workspaceDescription={workspaceDescription}
         isSubmittingWorkspace={isSubmittingWorkspace}
-        onClose={closeCreateWorkspaceDialog}
+        createWorkspaceError={createWorkspaceError}
+        onClose={handleCloseCreateWorkspace}
         onSubmit={handleCreateWorkspace}
         onNameChange={setWorkspaceName}
         onDescriptionChange={setWorkspaceDescription}

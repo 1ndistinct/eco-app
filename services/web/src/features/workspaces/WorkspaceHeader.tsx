@@ -1,14 +1,14 @@
 import { FormEvent, MouseEvent } from "react";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
+import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import {
   Badge,
   Box,
-  Button,
   FormControl,
-  IconButton,
   InputLabel,
   MenuItem,
   Paper,
@@ -17,9 +17,12 @@ import {
   Stack,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 
 import { WorkspaceAccess } from "../../app/types";
+import { AppIconButton } from "../../components/ui";
 import { CollaboratorsPopover } from "./CollaboratorsPopover";
 import { formatWorkspaceLabel } from "./workspaceLabels";
 
@@ -37,14 +40,16 @@ type WorkspaceHeaderProps = {
   shareError: string | null;
   shareSuccess: string | null;
   removingCollaboratorEmails: string[];
-  viewMode: "workspace" | "settings";
+  isWorkspaceSettingsOpen: boolean;
+  isSidebarExpanded: boolean;
   onWorkspaceChange: (workspaceID: string) => void;
-  onOpenCreateWorkspace: () => void;
+  onOpenCreateWorkspace: (event: MouseEvent<HTMLElement>) => void;
   onOpenCollaborators: (event: MouseEvent<HTMLElement>) => void;
   onCloseCollaborators: () => void;
   onShareEmailChange: (value: string) => void;
   onShareWorkspace: (event: FormEvent<HTMLFormElement>) => void;
   onRemoveCollaborator: (email: string) => void;
+  onToggleSidebar: () => void;
   onToggleSettings: () => void;
   onLogout: () => void;
 };
@@ -63,7 +68,8 @@ export function WorkspaceHeader({
   shareError,
   shareSuccess,
   removingCollaboratorEmails,
-  viewMode,
+  isWorkspaceSettingsOpen,
+  isSidebarExpanded,
   onWorkspaceChange,
   onOpenCreateWorkspace,
   onOpenCollaborators,
@@ -71,12 +77,22 @@ export function WorkspaceHeader({
   onShareEmailChange,
   onShareWorkspace,
   onRemoveCollaborator,
+  onToggleSidebar,
   onToggleSettings,
   onLogout,
 }: WorkspaceHeaderProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  if (!isMobile) {
+    return null;
+  }
+
   function handleWorkspaceSelection(event: SelectChangeEvent<string>) {
     onWorkspaceChange(event.target.value);
   }
+
+  const sidebarLabel = isSidebarExpanded ? "Close app drawer" : "Open app drawer";
 
   return (
     <Paper
@@ -85,84 +101,131 @@ export function WorkspaceHeader({
       className="page-header"
       sx={{ px: { xs: 1.5, md: 3 }, py: { xs: 1.5, md: 2 }, borderRadius: 0 }}
     >
-      <Stack
-        direction={{ xs: "column", lg: "row" }}
-        spacing={2}
-        sx={{ justifyContent: "space-between", alignItems: { lg: "center" } }}
-      >
-        <Box>
-          <Typography variant="h5">Workspaces</Typography>
-          <Typography color="text.secondary">{currentUserEmail}</Typography>
-        </Box>
-
+      <Stack spacing={1.25} className="header-controls">
         <Stack
-          direction={{ xs: "column", sm: "row" }}
+          direction="row"
           spacing={1}
-          sx={{ alignItems: { sm: "center" }, width: { xs: "100%", lg: "auto" } }}
+          sx={{
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+            rowGap: 1,
+          }}
         >
-          <Tooltip
-            title={`${collaboratorCount} collaborator${collaboratorCount === 1 ? "" : "s"}`}
+          <Stack
+            direction="row"
+            spacing={1}
+            className="header-primary-controls"
+            sx={{ alignItems: "center", flexWrap: "wrap", flex: "1 1 24rem" }}
           >
-            <IconButton
-              color="inherit"
-              className="header-collaborators"
-              aria-label="Open collaborators"
-              disabled={!currentWorkspace}
-              onClick={onOpenCollaborators}
+            {isMobile ? (
+              <>
+                <Stack direction="row" spacing={0.875} className="header-brand-cluster">
+                  <Box component="img" src="/logo.svg" alt="Eco" className="header-logo" />
+                  <Typography variant="h6" className="header-brand-wordmark">
+                    eco
+                  </Typography>
+                </Stack>
+
+                <Tooltip title={sidebarLabel}>
+                  <AppIconButton
+                    color="inherit"
+                    className={`header-action-button header-sidebar-toggle${isSidebarExpanded ? " header-action-button-active" : ""}`}
+                    aria-label={sidebarLabel}
+                    onClick={onToggleSidebar}
+                  >
+                    {isSidebarExpanded ? <CloseRoundedIcon /> : <MenuRoundedIcon />}
+                  </AppIconButton>
+                </Tooltip>
+              </>
+            ) : null}
+
+            <FormControl size="small" className="workspace-select">
+              <InputLabel id="workspace-select-label">Workspace</InputLabel>
+              <Select
+                labelId="workspace-select-label"
+                value={selectedWorkspace}
+                label="Workspace"
+                onChange={handleWorkspaceSelection}
+                displayEmpty
+                renderValue={() =>
+                  currentWorkspace ? formatWorkspaceLabel(currentWorkspace) : "Select workspace"
+                }
+              >
+                {accessibleWorkspaces.map((workspace) => (
+                  <MenuItem key={workspace.id} value={workspace.id}>
+                    {formatWorkspaceLabel(workspace)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <Tooltip title="Create workspace">
+              <AppIconButton
+                color="primary"
+                className="header-action-button"
+                aria-label="Create workspace"
+                onClick={onOpenCreateWorkspace}
+              >
+                <AddRoundedIcon />
+              </AppIconButton>
+            </Tooltip>
+
+            <Tooltip
+              title={`${collaboratorCount} collaborator${collaboratorCount === 1 ? "" : "s"}`}
             >
-              <Badge badgeContent={collaboratorCount} color="secondary" showZero>
-                <GroupRoundedIcon />
-              </Badge>
-            </IconButton>
-          </Tooltip>
+              <AppIconButton
+                color="inherit"
+                className="header-action-button header-collaborators"
+                aria-label="Open collaborators"
+                disabled={!currentWorkspace}
+                onClick={onOpenCollaborators}
+              >
+                <Badge badgeContent={collaboratorCount} color="secondary" showZero>
+                  <GroupRoundedIcon />
+                </Badge>
+              </AppIconButton>
+            </Tooltip>
+          </Stack>
 
-          <FormControl size="small" className="workspace-select">
-            <InputLabel id="workspace-select-label">Workspace</InputLabel>
-            <Select
-              labelId="workspace-select-label"
-              value={selectedWorkspace}
-              label="Workspace"
-              onChange={handleWorkspaceSelection}
-              displayEmpty
-              renderValue={() =>
-                currentWorkspace ? formatWorkspaceLabel(currentWorkspace) : "Select workspace"
-              }
-            >
-              {accessibleWorkspaces.map((workspace) => (
-                <MenuItem key={workspace.id} value={workspace.id}>
-                  {formatWorkspaceLabel(workspace)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <IconButton
-            color="primary"
-            aria-label="Create workspace"
-            onClick={onOpenCreateWorkspace}
+          <Stack
+            direction="row"
+            spacing={0.75}
+            className="header-utility-controls"
+            sx={{ alignItems: "center", marginLeft: "auto" }}
           >
-            <AddRoundedIcon />
-          </IconButton>
+            <Tooltip title={isWorkspaceSettingsOpen ? "Close settings" : "Open settings"}>
+              <span>
+                <AppIconButton
+                  color="inherit"
+                  className={`header-action-button${isWorkspaceSettingsOpen ? " header-action-button-active" : ""}`}
+                  aria-label={isWorkspaceSettingsOpen ? "Close settings" : "Open settings"}
+                  disabled={!currentWorkspace}
+                  onClick={onToggleSettings}
+                >
+                  <SettingsRoundedIcon />
+                </AppIconButton>
+              </span>
+            </Tooltip>
 
-          <Button
-            variant={viewMode === "settings" ? "contained" : "outlined"}
-            color="inherit"
-            startIcon={<SettingsRoundedIcon />}
-            disabled={!currentWorkspace}
-            onClick={onToggleSettings}
-          >
-            {viewMode === "settings" ? "Back to workspace" : "Workspace settings"}
-          </Button>
-
-          <Button
-            variant="outlined"
-            color="inherit"
-            onClick={onLogout}
-            startIcon={<LogoutRoundedIcon />}
-          >
-            Log out
-          </Button>
+            <Tooltip title="Log out">
+              <AppIconButton
+                color="inherit"
+                className="header-action-button"
+                aria-label="Log out"
+                onClick={onLogout}
+              >
+                <LogoutRoundedIcon />
+              </AppIconButton>
+            </Tooltip>
+          </Stack>
         </Stack>
+
+        {currentUserEmail ? (
+          <Typography variant="body2" color="text.secondary" className="header-user-meta">
+            Signed in as {currentUserEmail}
+          </Typography>
+        ) : null}
       </Stack>
 
       <CollaboratorsPopover

@@ -22,12 +22,42 @@ function authenticatedSession(passwordResetRequired = false) {
   };
 }
 
+function workspaceItemsResponse(items: object[] = []) {
+  return new Response(
+    JSON.stringify({
+      items,
+      workspaceId: "workspace-1",
+    }),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
+function setMatchMedia(matches: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
 describe("App", () => {
   const fetchMock = vi.fn<typeof fetch>();
 
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
+    setMatchMedia(false);
   });
 
   afterEach(() => {
@@ -131,8 +161,10 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /log in/i }));
 
     expect(await screen.findByText("Ship auth flow")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /open workspace selector/i }));
     expect(screen.getByRole("combobox")).toHaveTextContent("Personal · owner@example.com");
-    expect(screen.getByRole("heading", { name: "Personal" })).toBeInTheDocument();
+    expect(screen.getByText(/signed in as/i)).toBeInTheDocument();
+    expect(screen.getByText(/^owner@example\.com$/i)).toBeInTheDocument();
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(4);
@@ -190,7 +222,10 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /save password/i }));
 
-    expect(await screen.findByRole("heading", { name: /workspaces/i })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /open workspace selector/i }));
+    expect(await screen.findByRole("combobox")).toHaveTextContent("Personal · owner@example.com");
+    expect(screen.getByText(/signed in as/i)).toBeInTheDocument();
+    expect(screen.getByText(/^owner@example\.com$/i)).toBeInTheDocument();
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/auth/reset-password");
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: "POST",
@@ -468,7 +503,8 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("Personal")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /open workspace selector/i }));
+    expect(await screen.findByRole("combobox")).toHaveTextContent("Personal · owner@example.com");
 
     fireEvent.click(screen.getByRole("button", { name: /open collaborators/i }));
 
@@ -593,7 +629,8 @@ describe("App", () => {
 
     render(<App />);
 
-    await screen.findByRole("heading", { name: /workspaces/i });
+    fireEvent.click(await screen.findByRole("button", { name: /open workspace selector/i }));
+    await screen.findByRole("combobox");
 
     fireEvent.click(screen.getByRole("button", { name: /create workspace/i }));
     fireEvent.change(await screen.findByLabelText(/workspace name/i), {
@@ -602,19 +639,25 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText(/description/i), {
       target: { value: "Track rollout work." },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^create workspace$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^add workspace$/i }));
 
     expect(await screen.findByText(/created launch queue/i)).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: /create workspace/i })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/workspace name/i)).not.toBeInTheDocument();
     });
     expect(screen.getByRole("combobox")).toHaveTextContent("Launch Queue · owner@example.com");
 
-    fireEvent.click(screen.getByRole("button", { name: /workspace settings/i }));
-    expect(await screen.findByRole("heading", { name: /workspace settings/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
+    expect(
+      await screen.findByRole("dialog", { name: /workspace settings/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /workspace settings/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^delete workspace$/i }));
 
     expect(await screen.findByText(/deleted launch queue/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: /workspace settings/i })).not.toBeInTheDocument();
+    });
 
     expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/workspaces");
     expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
@@ -629,6 +672,68 @@ describe("App", () => {
     expect(fetchMock.mock.calls[6]?.[0]).toBe("/api/workspaces/workspace-2");
     expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({
       method: "DELETE",
+    });
+  });
+
+  it("keeps desktop navigation collapsed by default and opens the workspace selector on demand", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(authenticatedSession()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(workspaceItemsResponse())
+      .mockResolvedValueOnce(workspaceItemsResponse());
+
+    render(<App />);
+
+    expect(await screen.findByAltText("Eco")).toBeInTheDocument();
+    const selectorButton = screen.getByRole("button", { name: /open workspace selector/i });
+    const createWorkspaceButton = screen.getByRole("button", { name: /create workspace/i });
+    const collaboratorsButton = screen.getByRole("button", { name: /open collaborators/i });
+    const settingsButton = screen.getByRole("button", { name: /open settings/i });
+    const todosButton = screen.getByRole("button", { name: /open todos app/i });
+
+    expect(selectorButton).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(createWorkspaceButton.compareDocumentPosition(todosButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(collaboratorsButton.compareDocumentPosition(todosButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(todosButton.compareDocumentPosition(settingsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("button", { name: /open todos app/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open app drawer/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Default workspace")).not.toBeInTheDocument();
+
+    fireEvent.click(selectorButton);
+
+    expect(screen.getByRole("button", { name: /collapse workspace selector/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toHaveTextContent("Personal · owner@example.com");
+  });
+
+  it("shows a full-screen mobile drawer for app selection", async () => {
+    setMatchMedia(true);
+
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(authenticatedSession()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(workspaceItemsResponse())
+      .mockResolvedValueOnce(workspaceItemsResponse());
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /open app drawer/i }));
+
+    expect(await screen.findByRole("heading", { name: /choose a section/i })).toBeInTheDocument();
+    expect(document.body.querySelector(".workspace-mobile-drawer")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /^todos$/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: /choose a section/i })).not.toBeInTheDocument();
     });
   });
 });

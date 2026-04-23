@@ -14,12 +14,18 @@ Build and maintain echo-agentic-todo-postfix-20260411210213 as a standard multi-
 - Use notes/ for workspace rules, ADRs, and task handoffs.
 
 ## Style Guides
-- Backend: Go.
+- Backend: Go, using `services/app/docs/go-style.md` for new and changed backend code.
 - Frontend: React + Vite + TypeScript.
 - Prefer Taskfile commands for local work.
 
 ## Agent Model
 - Use coordinator-led specialist routing.
+- Treat notes/agents/ as the repo-local specialist continuity layer.
+- Treat notes/agents/registry.md and system/agents/registry.md as the source of truth for specialist roles, capabilities, and owned scopes.
+- Use the specialist whose owned scope matches the files being changed, and keep one coordinating view over integration, notes, and final validation.
+- When parallel work is available and permitted, split it only across disjoint owned scopes from the registries.
+- Do not parallelize overlapping write scopes; route cross-cutting decisions back through the coordinating view.
+- Treat system/teams/platform/policy.json as the default validation contract for changed scopes unless a deeper repo rule overrides it.
 - Backend defines shared contracts before frontend integrates against them.
 - Default public routing is one Traefik host with frontend at `/` and backend under `/api`.
 - Shipped validation should include the host probes and `task test:e2e` when that browser path exists.

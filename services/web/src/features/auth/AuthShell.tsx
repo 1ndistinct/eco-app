@@ -18,7 +18,10 @@ export function AuthShell({ title, subtitle, content, helper }: AuthShellProps) 
           <Paper
             elevation={0}
             className="hero-panel"
-            sx={{ p: { xs: 3, md: 4 }, borderRadius: { xs: "20px", md: "24px" } }}
+            sx={{
+              p: { xs: 3, md: 4 },
+              borderRadius: { xs: "var(--surface-radius)", md: "var(--surface-radius-lg)" },
+            }}
           >
             <Stack spacing={2}>
               <Chip
@@ -39,7 +42,10 @@ export function AuthShell({ title, subtitle, content, helper }: AuthShellProps) 
           <Paper
             elevation={0}
             className="soft-panel auth-panel"
-            sx={{ p: { xs: 3, md: 3.5 }, borderRadius: { xs: "18px", md: "22px" } }}
+            sx={{
+              p: { xs: 3, md: 3.5 },
+              borderRadius: { xs: "var(--surface-radius)", md: "var(--surface-radius-lg)" },
+            }}
           >
             {content}
           </Paper>

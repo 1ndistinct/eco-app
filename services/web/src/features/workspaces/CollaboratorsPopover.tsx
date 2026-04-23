@@ -3,22 +3,20 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
-import { alpha } from "@mui/material/styles";
 import {
   Alert,
   Box,
-  Button,
   Chip,
   CircularProgress,
   Divider,
   Paper,
-  Popover,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
 
 import { WorkspaceAccess } from "../../app/types";
+import { AppButton, PopoverSurface } from "../../components/ui";
 
 type CollaboratorsPopoverProps = {
   anchorEl: HTMLElement | null;
@@ -58,23 +56,10 @@ export function CollaboratorsPopover({
   }
 
   return (
-    <Popover
+    <PopoverSurface
       open={open}
       anchorEl={anchorEl}
       onClose={onClose}
-      anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-      transformOrigin={{ vertical: "top", horizontal: "right" }}
-      slotProps={{
-        paper: {
-          sx: {
-            mt: 1,
-            width: { xs: "calc(100vw - 2rem)", sm: 380 },
-            maxWidth: "calc(100vw - 2rem)",
-            p: 2,
-            borderRadius: "20px",
-          },
-        },
-      }}
     >
       <Stack spacing={2}>
         <Box>
@@ -100,7 +85,7 @@ export function CollaboratorsPopover({
               <Chip
                 size="small"
                 label="Owner"
-                sx={{ bgcolor: alpha("#16423c", 0.08), color: "text.primary" }}
+                sx={{ color: "text.primary" }}
               />
             </Stack>
           </Paper>
@@ -128,10 +113,9 @@ export function CollaboratorsPopover({
                       </Typography>
                     </Stack>
 
-                    <Button
+                    <AppButton
                       variant="text"
                       color="error"
-                      size="small"
                       disabled={isRemoving || isSubmittingShare}
                       onClick={() => onRemoveCollaborator(email)}
                       aria-label={`Remove ${email}`}
@@ -144,7 +128,7 @@ export function CollaboratorsPopover({
                       }
                     >
                       {isRemoving ? "Removing..." : "Remove"}
-                    </Button>
+                    </AppButton>
                   </Stack>
                 </Paper>
               );
@@ -166,7 +150,7 @@ export function CollaboratorsPopover({
               size="small"
               fullWidth
             />
-            <Button
+            <AppButton
               type="submit"
               variant="contained"
               color="primary"
@@ -181,13 +165,13 @@ export function CollaboratorsPopover({
               sx={{ alignSelf: "flex-start" }}
             >
               {isSubmittingShare ? "Adding..." : "Add collaborator"}
-            </Button>
+            </AppButton>
           </Stack>
         </Box>
 
         {shareError ? <Alert severity="error">{shareError}</Alert> : null}
         {shareSuccess ? <Alert severity="success">{shareSuccess}</Alert> : null}
       </Stack>
-    </Popover>
+    </PopoverSurface>
   );
 }
