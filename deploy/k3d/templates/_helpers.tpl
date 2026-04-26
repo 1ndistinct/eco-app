@@ -14,6 +14,10 @@
 {{ include "app.fullname" . }}-web
 {{- end -}}
 
+{{- define "app.webTodoServiceName" -}}
+{{ include "app.fullname" . }}-web-todo
+{{- end -}}
+
 {{- define "app.postgresServiceName" -}}
 {{ include "app.fullname" . }}-postgres
 {{- end -}}

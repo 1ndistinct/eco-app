@@ -1,0 +1,76 @@
+:root {
+  --surface-radius: 14px;
+  --surface-radius-lg: 16px;
+  --glass-border-muted: rgba(173, 186, 201, 0.26);
+}
+
+body {
+  padding: 1.25rem;
+}
+
+.soft-panel,
+.workspace-panel {
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 4px 14px rgba(148, 163, 184, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.workspace-panel {
+  height: calc(100dvh - 2.5rem);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-panel-content {
+  flex: 1;
+  min-height: 0;
+}
+
+.todo-list-scrollbox {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.todo-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.todo-row {
+  padding: 1rem 1.125rem;
+  border-radius: var(--surface-radius);
+  border: 1px solid var(--glass-border-muted);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.todo-row-editor {
+  background: rgba(243, 247, 251, 0.86);
+}
+
+.todo-row-done {
+  background: rgba(239, 246, 242, 0.84);
+}
+
+.todo-title-done {
+  text-decoration: line-through;
+  color: #5f6c65;
+}
+
+.todo-actions {
+  flex-wrap: wrap;
+}
+
+.empty-state {
+  padding: 1.125rem;
+  border-radius: var(--surface-radius);
+  border: 1px dashed rgba(184, 195, 208, 0.74);
+  background: rgba(255, 255, 255, 0.64);
+}

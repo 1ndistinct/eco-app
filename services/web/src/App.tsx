@@ -7,7 +7,6 @@ import {
   RESET_PASSWORD_ENDPOINT,
   SESSION_ENDPOINT,
   SHARE_ENDPOINT,
-  TODO_ENDPOINT,
   WORKSPACE_ENDPOINT,
   readErrorMessage,
 } from "./app/api";
@@ -16,8 +15,6 @@ import {
   EMPTY_WORKSPACES,
   SessionState,
   ShareListResponse,
-  Todo,
-  TodoListResponse,
   UNAUTHENTICATED_SESSION,
   WorkspaceAccess,
   WorkspaceShare,
@@ -47,14 +44,10 @@ function readInitialAuthError() {
 
 function resetTransientWorkspaceState() {
   return {
-    todos: [] as Todo[],
     shares: [] as WorkspaceShare[],
     workspaceError: null as string | null,
     shareError: null as string | null,
     shareSuccess: null as string | null,
-    todoError: null as string | null,
-    isAddingTodoInline: false,
-    draftTodoTitle: "",
   };
 }
 
@@ -104,9 +97,7 @@ export default function App() {
   const [isWorkspaceSettingsOpen, setIsWorkspaceSettingsOpen] = useState(false);
   const [isDesktopSidebarExpanded, setIsDesktopSidebarExpanded] = useState(false);
   const [isMobileAppDrawerOpen, setIsMobileAppDrawerOpen] = useState(false);
-  const [todos, setTodos] = useState<Todo[]>([]);
   const [shares, setShares] = useState<WorkspaceShare[]>([]);
-  const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [shareEmail, setShareEmail] = useState("");
   const [shareError, setShareError] = useState<string | null>(null);
@@ -116,12 +107,6 @@ export default function App() {
     null,
   );
   const [removingCollaboratorEmails, setRemovingCollaboratorEmails] = useState<string[]>([]);
-  const [draftTodoTitle, setDraftTodoTitle] = useState("");
-  const [isAddingTodoInline, setIsAddingTodoInline] = useState(false);
-  const [todoError, setTodoError] = useState<string | null>(null);
-  const [isSubmittingTodo, setIsSubmittingTodo] = useState(false);
-  const [updatingTodoIds, setUpdatingTodoIds] = useState<string[]>([]);
-  const [deletingTodoIds, setDeletingTodoIds] = useState<string[]>([]);
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspaceDescription, setWorkspaceDescription] = useState("");
   const [createWorkspaceAnchorEl, setCreateWorkspaceAnchorEl] = useState<HTMLElement | null>(null);
@@ -147,8 +132,6 @@ export default function App() {
     [currentWorkspace?.ownerEmail, shares],
   );
 
-  const remainingCount = useMemo(() => todos.filter((todo) => !todo.completed).length, [todos]);
-  const completedCount = todos.length - remainingCount;
   const canManageCurrentWorkspace = currentWorkspace?.role === "owner";
 
   useEffect(() => {
@@ -175,9 +158,6 @@ export default function App() {
       setShareSuccess(null);
       setCollaboratorMenuAnchorEl(null);
       setRemovingCollaboratorEmails([]);
-      setTodoError(null);
-      setDraftTodoTitle("");
-      setIsAddingTodoInline(false);
       setCreateWorkspaceAnchorEl(null);
       setCreateWorkspaceError(null);
       setWorkspaceManageError(null);
@@ -202,14 +182,10 @@ export default function App() {
     }
 
     const clearedState = resetTransientWorkspaceState();
-    setTodos(clearedState.todos);
     setShares(clearedState.shares);
     setWorkspaceError(clearedState.workspaceError);
     setShareError(clearedState.shareError);
     setShareSuccess(clearedState.shareSuccess);
-    setTodoError(clearedState.todoError);
-    setIsAddingTodoInline(clearedState.isAddingTodoInline);
-    setDraftTodoTitle(clearedState.draftTodoTitle);
     setIsDesktopSidebarExpanded(false);
     setIsMobileAppDrawerOpen(false);
     setShareEmail("");
@@ -292,9 +268,7 @@ export default function App() {
       sessionState.user?.passwordResetRequired ||
       !selectedWorkspaceId
     ) {
-      setTodos([]);
       setShares([]);
-      setIsWorkspaceLoading(false);
       setWorkspaceError(null);
       return;
     }
@@ -302,44 +276,31 @@ export default function App() {
     let isActive = true;
 
     void (async () => {
-      setIsWorkspaceLoading(true);
       setWorkspaceError(null);
 
       try {
-        const [todoResponse, shareResponse] = await Promise.all([
-          fetch(`${TODO_ENDPOINT}?workspace=${encodeURIComponent(selectedWorkspaceId)}`),
-          fetch(`${SHARE_ENDPOINT}?workspace=${encodeURIComponent(selectedWorkspaceId)}`),
-        ]);
-
-        if (!todoResponse.ok) {
-          throw new Error(await readErrorMessage(todoResponse, "Unable to load todos."));
-        }
+        const shareResponse = await fetch(
+          `${SHARE_ENDPOINT}?workspace=${encodeURIComponent(selectedWorkspaceId)}`,
+        );
         if (!shareResponse.ok) {
           throw new Error(await readErrorMessage(shareResponse, "Unable to load collaborators."));
         }
 
-        const todoData = (await todoResponse.json()) as Partial<TodoListResponse>;
         const shareData = (await shareResponse.json()) as Partial<ShareListResponse>;
 
         if (!isActive) {
           return;
         }
 
-        setTodos(Array.isArray(todoData.items) ? todoData.items : []);
         setShares(Array.isArray(shareData.items) ? shareData.items : []);
       } catch (error) {
         if (!isActive) {
           return;
         }
         setWorkspaceError(
-          error instanceof Error ? error.message : "Unable to load workspace data.",
+          error instanceof Error ? error.message : "Unable to load collaborators.",
         );
-        setTodos([]);
         setShares([]);
-      } finally {
-        if (isActive) {
-          setIsWorkspaceLoading(false);
-        }
       }
     })();
 
@@ -359,9 +320,6 @@ export default function App() {
     setShareSuccess(null);
     setCollaboratorMenuAnchorEl(null);
     setRemovingCollaboratorEmails([]);
-    setTodoError(null);
-    setDraftTodoTitle("");
-    setIsAddingTodoInline(false);
     setCreateWorkspaceAnchorEl(null);
     setCreateWorkspaceError(null);
     setWorkspaceManageError(null);
@@ -463,7 +421,6 @@ export default function App() {
     setShareError(null);
     setShareSuccess(null);
     setShareEmail("");
-    setTodoError(null);
 
     try {
       await fetch(LOGOUT_ENDPOINT, { method: "POST" });
@@ -572,7 +529,6 @@ export default function App() {
       setCollaboratorMenuAnchorEl(null);
       setRemovingCollaboratorEmails([]);
       setShareEmail("");
-      setTodos([]);
       setShares([]);
     } catch (error) {
       setWorkspaceManageError(
@@ -670,7 +626,6 @@ export default function App() {
         updateWorkspaceLocation(nextWorkspaceId, "replace");
         setCollaboratorMenuAnchorEl(null);
         setShares([]);
-        setTodos([]);
       }
     } catch (error) {
       setShareError(error instanceof Error ? error.message : "Unable to remove collaborator.");
@@ -689,95 +644,6 @@ export default function App() {
 
   function handleCloseCollaborators() {
     setCollaboratorMenuAnchorEl(null);
-  }
-
-  async function handleSubmitTodo(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!currentWorkspace) {
-      return;
-    }
-
-    const trimmedTitle = draftTodoTitle.trim();
-    if (trimmedTitle === "") {
-      setTodoError("Todo title is required.");
-      return;
-    }
-
-    setIsSubmittingTodo(true);
-    setTodoError(null);
-
-    try {
-      const response = await fetch(TODO_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: trimmedTitle,
-          workspaceId: currentWorkspace.id,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response, "Unable to create todo."));
-      }
-
-      const createdTodo = (await response.json()) as Todo;
-      setTodos((current) => [...current, createdTodo]);
-      setDraftTodoTitle("");
-      setIsAddingTodoInline(false);
-    } catch (error) {
-      setTodoError(error instanceof Error ? error.message : "Unable to create todo.");
-    } finally {
-      setIsSubmittingTodo(false);
-    }
-  }
-
-  async function handleToggleTodo(todo: Todo) {
-    setUpdatingTodoIds((current) => [...current, todo.id]);
-    setTodoError(null);
-
-    try {
-      const response = await fetch(`${TODO_ENDPOINT}/${todo.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          completed: !todo.completed,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response, "Unable to update todo."));
-      }
-
-      const updatedTodo = (await response.json()) as Todo;
-      setTodos((current) =>
-        current.map((item) => (item.id === updatedTodo.id ? updatedTodo : item)),
-      );
-    } catch (error) {
-      setTodoError(error instanceof Error ? error.message : "Unable to update todo.");
-    } finally {
-      setUpdatingTodoIds((current) => current.filter((id) => id !== todo.id));
-    }
-  }
-
-  async function handleDeleteTodo(todo: Todo) {
-    setDeletingTodoIds((current) => [...current, todo.id]);
-    setTodoError(null);
-
-    try {
-      const response = await fetch(`${TODO_ENDPOINT}/${todo.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response, "Unable to delete todo."));
-      }
-
-      setTodos((current) => current.filter((item) => item.id !== todo.id));
-    } catch (error) {
-      setTodoError(error instanceof Error ? error.message : "Unable to delete todo.");
-    } finally {
-      setDeletingTodoIds((current) => current.filter((id) => id !== todo.id));
-    }
   }
 
   if (isBootstrapping) {
@@ -913,38 +779,12 @@ export default function App() {
             <Stack spacing={2.5} className="workspace-body-stack">
               {workspaceManageError ? <Alert severity="error">{workspaceManageError}</Alert> : null}
               {workspaceSuccess ? <Alert severity="success">{workspaceSuccess}</Alert> : null}
+              {workspaceError ? <Alert severity="error">{workspaceError}</Alert> : null}
 
               <Box className="workspace-screen">
                 <WorkspaceView
                   currentWorkspace={currentWorkspace}
                   currentUserEmail={sessionState.user?.email}
-                  todos={todos}
-                  remainingCount={remainingCount}
-                  completedCount={completedCount}
-                  isWorkspaceLoading={isWorkspaceLoading}
-                  workspaceError={workspaceError}
-                  todoError={todoError}
-                  isAddingTodoInline={isAddingTodoInline}
-                  draftTodoTitle={draftTodoTitle}
-                  isSubmittingTodo={isSubmittingTodo}
-                  updatingTodoIds={updatingTodoIds}
-                  deletingTodoIds={deletingTodoIds}
-                  onStartInlineTodo={() => {
-                    setIsAddingTodoInline(true);
-                    setTodoError(null);
-                  }}
-                  onDraftTodoTitleChange={setDraftTodoTitle}
-                  onSubmitTodo={handleSubmitTodo}
-                  onCancelInlineTodo={() => {
-                    if (isSubmittingTodo) {
-                      return;
-                    }
-                    setDraftTodoTitle("");
-                    setTodoError(null);
-                    setIsAddingTodoInline(false);
-                  }}
-                  onToggleTodo={handleToggleTodo}
-                  onDeleteTodo={handleDeleteTodo}
                 />
               </Box>
             </Stack>

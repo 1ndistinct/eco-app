@@ -14,6 +14,7 @@ tasks:
     desc: Install frontend dependencies
     cmds:
       - pnpm --dir services/web install --no-frozen-lockfile
+      - pnpm --dir services/web-todo install --no-frozen-lockfile
 
   k3d:bootstrap:
     desc: Create the local k3d registry and cluster if they do not already exist
@@ -59,6 +60,7 @@ tasks:
     cmds:
       - task install
       - sh -c 'TZ=UTC pnpm --dir services/web test -- --run'
+      - sh -c 'TZ=UTC pnpm --dir services/web-todo test -- --run'
 
   test:
     desc: Run backend and frontend tests
@@ -87,6 +89,7 @@ tasks:
     cmds:
       - task install
       - pnpm --dir services/web lint
+      - pnpm --dir services/web-todo lint
 
   lint:
     desc: Run backend and frontend linting
@@ -107,6 +110,7 @@ tasks:
     cmds:
       - task install
       - pnpm --dir services/web build
+      - pnpm --dir services/web-todo build
 
   build:
     desc: Build backend and frontend artifacts
@@ -130,11 +134,20 @@ tasks:
         ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-web:${IMAGE_TAG:-dev}"; \
         docker build -f services/web/Dockerfile -t "$ref" .'
 
+  docker:build:web-todo:
+    desc: Build the todo remote image with Docker
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-web-todo:${IMAGE_TAG:-dev}"; \
+        docker build -f services/web-todo/Dockerfile -t "$ref" .'
+
   docker:build:
     desc: Build the backend and frontend images with Docker
     cmds:
       - task docker:build:app
       - task docker:build:web
+      - task docker:build:web-todo
 
   docker:push:app:
     desc: Build and push the backend image with Docker
@@ -154,11 +167,21 @@ tasks:
         ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-web:${IMAGE_TAG:-dev}"; \
         docker push "$ref"'
 
+  docker:push:web-todo:
+    desc: Build and push the todo remote image with Docker
+    cmds:
+      - task docker:build:web-todo
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-web-todo:${IMAGE_TAG:-dev}"; \
+        docker push "$ref"'
+
   docker:push:
     desc: Build and push the backend and frontend images with Docker
     cmds:
       - task docker:push:app
       - task docker:push:web
+      - task docker:push:web-todo
 
   image:app:
     desc: Build and push the backend image with BuildKit
@@ -186,6 +209,19 @@ tasks:
           --opt filename=services/web/Dockerfile \
           --output type=image,name="$ref",push=true,registry.insecure=true'
 
+  image:web-todo:
+    desc: Build and push the todo remote image with BuildKit
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-k3d-echo-registry.localhost:5000}/echo-agentic-todo-postfix-20260411210213-web-todo:${IMAGE_TAG:-dev}"; \
+        buildctl-daemonless.sh build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --opt filename=services/web-todo/Dockerfile \
+          --output type=image,name="$ref",push=true,registry.insecure=true'
+
   helm:template:
     desc: Render the Helm chart with the current image settings
     cmds:
@@ -210,13 +246,16 @@ tasks:
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
-          --set-string images.web.tag="$tag"'
+          --set-string images.web.tag="$tag" \
+          --set-string images.webTodo.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-todo" \
+          --set-string images.webTodo.tag="$tag"'
 
   deploy:
     desc: Build images with BuildKit, deploy the chart, and refresh the app namespace
     cmds:
       - task image:app
       - task image:web
+      - task image:web-todo
       - |
         sh -c 'set -eu; \
         values_file="${K3D_VALUES_FILE:-./deploy/k3d/local.values.yaml}"; \
@@ -240,17 +279,22 @@ tasks:
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
-          --set-string images.web.tag="$tag"; \
+          --set-string images.web.tag="$tag" \
+          --set-string images.webTodo.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-todo" \
+          --set-string images.webTodo.tag="$tag"; \
         kubectl rollout restart deployment/"$release-app" -n "$ns"; \
         kubectl rollout restart deployment/"$release-web" -n "$ns"; \
+        kubectl rollout restart deployment/"$release-web-todo" -n "$ns"; \
         kubectl rollout status deployment/"$release-app" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
-        kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
+        kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
+        kubectl rollout status deployment/"$release-web-todo" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
 
   deploy:docker:
     desc: Build images with Docker, deploy the chart, and refresh the app namespace
     cmds:
       - task docker:push:app
       - task docker:push:web
+      - task docker:push:web-todo
       - |
         sh -c 'set -eu; \
         values_file="${K3D_VALUES_FILE:-./deploy/k3d/local.values.yaml}"; \
@@ -274,11 +318,15 @@ tasks:
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
-          --set-string images.web.tag="$tag"; \
+          --set-string images.web.tag="$tag" \
+          --set-string images.webTodo.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-todo" \
+          --set-string images.webTodo.tag="$tag"; \
         kubectl rollout restart deployment/"$release-app" -n "$ns"; \
         kubectl rollout restart deployment/"$release-web" -n "$ns"; \
+        kubectl rollout restart deployment/"$release-web-todo" -n "$ns"; \
         kubectl rollout status deployment/"$release-app" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
-        kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
+        kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
+        kubectl rollout status deployment/"$release-web-todo" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
 
   deploy:docker:tm:
     desc: Build images with Docker and deploy to tm with tm values and optional tm secrets
@@ -340,7 +388,7 @@ tasks:
         values_file="${K3D_VALUES_FILE:-./deploy/k3d/local.values.yaml}"; \
         default_host="$(awk '\''/^ingress:/{in_ingress=1; next} in_ingress && /^[^[:space:]]/{in_ingress=0} in_ingress && $1 == "host:" { print $2; exit } in_ingress && $1 == "-" { print $2; exit }'\'' "$values_file")"; \
         host="${INGRESS_HOST:-${default_host:-$release.localhost}}"; \
-        printf "frontend: http://%s/\nbackend: http://%s/api/healthz\n" "$host" "$host"'
+        printf "frontend: http://%s/\ntodo route: http://%s/todo/\nbackend: http://%s/api/healthz\nremote entry: http://%s/todo/remoteEntry.js\n" "$host" "$host" "$host" "$host"'
 
   logs:
     desc: "Stream deployment logs (for example: task logs -- web)"

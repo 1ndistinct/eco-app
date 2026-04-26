@@ -7,6 +7,10 @@ images:
     repository: k3d-echo-registry.localhost:5000/echo-agentic-todo-postfix-20260411210213-web
     tag: dev
     pullPolicy: Always
+  webTodo:
+    repository: k3d-echo-registry.localhost:5000/echo-agentic-todo-postfix-20260411210213-web-todo
+    tag: dev
+    pullPolicy: Always
 
 service:
   appPort: 8080

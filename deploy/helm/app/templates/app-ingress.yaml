@@ -15,6 +15,11 @@ spec:
         - name: {{ include "app.appServiceName" . }}
           port: {{ .Values.service.appPort }}
     - kind: Rule
+      match: ({{ include "app.ingressHostMatch" . }}) && (Path(`/todo/remoteEntry.js`) || PathPrefix(`/todo/assets/`))
+      services:
+        - name: {{ include "app.webTodoServiceName" . }}
+          port: {{ .Values.service.webPort }}
+    - kind: Rule
       match: ({{ include "app.ingressHostMatch" . }}) && PathPrefix(`/`)
       services:
         - name: {{ include "app.webServiceName" . }}

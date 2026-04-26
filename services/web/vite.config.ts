@@ -1,13 +1,44 @@
+import { federation } from "@module-federation/vite";
+import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig(() => {
   const isTest = process.env.VITEST === "true";
+  const todoRemoteEntry = process.env.VITE_TODO_REMOTE_ENTRY ?? "/todo/remoteEntry.js";
 
   return {
     plugins: [
       react(),
+      !isTest &&
+        federation({
+          name: "shellApp",
+          remotes: {
+            todoApp: {
+              type: "module",
+              name: "todoApp",
+              entry: todoRemoteEntry,
+            },
+          },
+          shared: {
+            react: {
+              singleton: true,
+            },
+            "react-dom": {
+              singleton: true,
+            },
+            "@mui/material": {
+              singleton: true,
+            },
+            "@emotion/react": {
+              singleton: true,
+            },
+            "@emotion/styled": {
+              singleton: true,
+            },
+          },
+        }),
       !isTest &&
         VitePWA({
           injectRegister: "script",
@@ -49,6 +80,33 @@ export default defineConfig(() => {
           },
         }),
     ].filter(Boolean),
+    resolve: {
+      alias: isTest
+        ? {
+            "todoApp/TodoFeature": fileURLToPath(
+              new URL("../web-todo/src/exposed/TodoFeature.tsx", import.meta.url),
+            ),
+          }
+        : undefined,
+    },
+    server: {
+      fs: {
+        allow: [".."],
+      },
+      proxy: {
+        "/todo/remoteEntry.js": {
+          target: process.env.VITE_TODO_DEV_SERVER ?? "http://127.0.0.1:4174",
+          changeOrigin: true,
+        },
+        "/todo/assets": {
+          target: process.env.VITE_TODO_DEV_SERVER ?? "http://127.0.0.1:4174",
+          changeOrigin: true,
+        },
+      },
+    },
+    build: {
+      target: "chrome89",
+    },
     test: {
       environment: "jsdom",
       setupFiles: "./src/test/setup.ts",

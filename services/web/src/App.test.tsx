@@ -113,21 +113,25 @@ describe("App", () => {
   });
 
   it("logs in and loads the selected workspace", async () => {
-    fetchMock
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ authenticated: false }), {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: false }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify(authenticatedSession()), {
+        });
+      }
+
+      if (url === "/api/auth/login") {
+        return new Response(JSON.stringify(authenticatedSession()), {
           status: 200,
           headers: { "Content-Type": "application/json" },
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(
+        });
+      }
+
+      if (url === "/api/todos?workspace=workspace-1") {
+        return new Response(
           JSON.stringify({
             items: [
               {
@@ -144,20 +148,15 @@ describe("App", () => {
             status: 200,
             headers: { "Content-Type": "application/json" },
           },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
-      );
+        );
+      }
+
+      if (url === "/api/shares?workspace=workspace-1") {
+        return workspaceItemsResponse([], "workspace-1");
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
 
     render(<App />);
 
@@ -174,18 +173,22 @@ describe("App", () => {
     expect(screen.getByRole("combobox")).toHaveTextContent("Personal · owner@example.com");
     expect(screen.getByText(/signed in as/i)).toBeInTheDocument();
     expect(screen.getByText(/^owner@example\.com$/i)).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/workspaces/workspace-1");
+    expect(window.location.pathname).toBe("/todo/workspaces/workspace-1");
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(4);
     });
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/auth/login");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/todos?workspace=workspace-1");
-    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/shares?workspace=workspace-1");
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(
+      expect.arrayContaining([
+        "/api/todos?workspace=workspace-1",
+        "/api/shares?workspace=workspace-1",
+      ]),
+    );
   });
 
   it("loads the workspace selected in the URL path on refresh", async () => {
-    window.history.replaceState({}, "", "/workspaces/workspace-2");
+    window.history.replaceState({}, "", "/todo/workspaces/workspace-2");
 
     fetchMock
       .mockResolvedValueOnce(
@@ -223,10 +226,14 @@ describe("App", () => {
     expect(await screen.findByRole("combobox")).toHaveTextContent(
       "Launch Queue · owner@example.com",
     );
-    expect(window.location.pathname).toBe("/workspaces/workspace-2");
+    expect(window.location.pathname).toBe("/todo/workspaces/workspace-2");
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/todos?workspace=workspace-2");
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/shares?workspace=workspace-2");
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(
+      expect.arrayContaining([
+        "/api/todos?workspace=workspace-2",
+        "/api/shares?workspace=workspace-2",
+      ]),
+    );
   });
 
   it("forces a password reset before workspace data loads", async () => {
@@ -700,7 +707,7 @@ describe("App", () => {
       expect(screen.queryByLabelText(/workspace name/i)).not.toBeInTheDocument();
     });
     expect(screen.getByRole("combobox")).toHaveTextContent("Launch Queue · owner@example.com");
-    expect(window.location.pathname).toBe("/workspaces/workspace-2");
+    expect(window.location.pathname).toBe("/todo/workspaces/workspace-2");
 
     fireEvent.click(screen.getByRole("button", { name: /open settings/i }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -711,7 +718,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
-    expect(window.location.pathname).toBe("/workspaces/workspace-1");
+    expect(window.location.pathname).toBe("/todo/workspaces/workspace-1");
 
     expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/workspaces");
     expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
@@ -773,10 +780,14 @@ describe("App", () => {
     );
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe("/workspaces/workspace-2");
+      expect(window.location.pathname).toBe("/todo/workspaces/workspace-2");
     });
-    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/todos?workspace=workspace-2");
-    expect(fetchMock.mock.calls[4]?.[0]).toBe("/api/shares?workspace=workspace-2");
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(
+      expect.arrayContaining([
+        "/api/todos?workspace=workspace-2",
+        "/api/shares?workspace=workspace-2",
+      ]),
+    );
   });
 
   it("keeps desktop navigation collapsed by default and opens the workspace selector on demand", async () => {

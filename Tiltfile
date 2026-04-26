@@ -1,4 +1,14 @@
-watch_settings(ignore=[".git", ".cache", "node_modules", "services/web/node_modules", "services/web/dist"])
+watch_settings(
+  ignore=[
+    ".git",
+    ".cache",
+    "node_modules",
+    "services/web/node_modules",
+    "services/web/dist",
+    "services/web-todo/node_modules",
+    "services/web-todo/dist",
+  ],
+)
 
 deploy_deps = [
   "Taskfile.yml",
@@ -8,6 +18,7 @@ deploy_deps = [
   "deploy/k3d",
   "services/app",
   "services/web",
+  "services/web-todo",
 ]
 
 local_resource(
@@ -94,6 +105,14 @@ local_resource(
 local_resource(
   "logs-web",
   "task logs -- web",
+  trigger_mode=TRIGGER_MODE_MANUAL,
+  auto_init=False,
+  allow_parallel=True,
+)
+
+local_resource(
+  "logs-web-todo",
+  "task logs -- web-todo",
   trigger_mode=TRIGGER_MODE_MANUAL,
   auto_init=False,
   allow_parallel=True,
