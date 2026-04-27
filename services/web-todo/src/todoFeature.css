@@ -36,6 +36,14 @@ body {
   padding-right: 0.25rem;
 }
 
+.todo-sections {
+  min-height: min-content;
+}
+
+.todo-section {
+  min-width: 0;
+}
+
 .todo-list {
   list-style: none;
   padding: 0;

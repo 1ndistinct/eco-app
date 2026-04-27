@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const defaultWorkspaceName = "Personal"
@@ -426,6 +427,7 @@ func (s *memoryStore) CreateTodo(_ context.Context, actorEmail string, workspace
 		Completed:   false,
 		OwnerEmail:  normalizedActorEmail,
 		WorkspaceID: workspace.id,
+		CreatedAt:   time.Now().UTC(),
 	}
 	s.nextTodoID++
 	s.todos = append(s.todos, todo)
@@ -433,7 +435,13 @@ func (s *memoryStore) CreateTodo(_ context.Context, actorEmail string, workspace
 	return todo, nil
 }
 
-func (s *memoryStore) UpdateCompleted(_ context.Context, actorEmail string, id string, completed bool) (Todo, error) {
+func (s *memoryStore) UpdateTodo(
+	_ context.Context,
+	actorEmail string,
+	id string,
+	title *string,
+	completed *bool,
+) (Todo, error) {
 	normalizedActorEmail := normalizeEmail(actorEmail)
 
 	s.mu.Lock()
@@ -447,7 +455,14 @@ func (s *memoryStore) UpdateCompleted(_ context.Context, actorEmail string, id s
 			return Todo{}, ErrWorkspaceAccessDenied
 		}
 
-		todo.Completed = completed
+		if title != nil {
+			todo.Title = *title
+		}
+		if completed != nil {
+			todo.Completed = *completed
+		}
+		editedAt := time.Now().UTC()
+		todo.EditedAt = &editedAt
 		s.todos[index] = todo
 		return todo, nil
 	}

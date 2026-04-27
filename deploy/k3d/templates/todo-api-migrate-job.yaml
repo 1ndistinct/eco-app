@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "app.todoApiMigrationJobName" . }}
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "app.todoApiMigrationJobName" . }}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: todo-api-migrate
+          image: "{{ .Values.images.todoApi.repository }}:{{ .Values.images.todoApi.tag }}"
+          imagePullPolicy: {{ .Values.images.todoApi.pullPolicy }}
+          args:
+            - migrate
+          env:
+            - name: DATABASE_URL
+              value: {{ include "app.databaseURL" . | quote }}

@@ -2,12 +2,17 @@ import { expect, test } from "@playwright/test";
 
 const loginEmail = process.env.PLAYWRIGHT_LOGIN_EMAIL;
 const loginPassword = process.env.PLAYWRIGHT_LOGIN_PASSWORD;
-const resetPassword = process.env.PLAYWRIGHT_RESET_PASSWORD ?? `${loginPassword ?? "password"}-reset`;
+const resetPassword =
+  process.env.PLAYWRIGHT_RESET_PASSWORD ?? `${loginPassword ?? "password"}-reset`;
 
 test("renders an authenticated workspace, creates a todo, and completes it", async ({ page }) => {
-  test.skip(!loginEmail || !loginPassword, "Set PLAYWRIGHT_LOGIN_EMAIL and PLAYWRIGHT_LOGIN_PASSWORD to run the authenticated flow.");
+  test.skip(
+    !loginEmail || !loginPassword,
+    "Set PLAYWRIGHT_LOGIN_EMAIL and PLAYWRIGHT_LOGIN_PASSWORD to run the authenticated flow.",
+  );
 
   const title = `Playwright todo ${Date.now()}`;
+  const updatedTitle = `${title} updated`;
 
   await page.goto("/");
 
@@ -36,9 +41,21 @@ test("renders an authenticated workspace, creates a todo, and completes it", asy
 
   await expect(todoCard).toBeVisible();
   await expect(todoCard.getByText(/owned by you/i)).toBeVisible();
+  await expect(todoCard.getByText(/created /i)).toBeVisible();
+  await todoCard.getByRole("button", { name: /^edit$/i }).click();
+  await todoCard.getByLabel(/todo title/i).fill(updatedTitle);
+  await todoCard.getByRole("button", { name: /^save$/i }).click();
+  await expect(page.getByRole("listitem").filter({ hasText: updatedTitle })).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: /todo items/i }).getByText(updatedTitle),
+  ).toBeVisible();
   await todoCard.getByRole("button", { name: /mark done/i }).click();
-  await expect(todoCard.getByText(/completed/i)).toBeVisible();
-  await expect(todoCard.getByRole("button", { name: /reopen/i })).toBeVisible();
-  await todoCard.getByRole("button", { name: new RegExp(`delete ${title}`, "i") }).click();
-  await expect(todoCard).toHaveCount(0);
+  const doneCard = page.getByRole("listitem").filter({ hasText: updatedTitle });
+  await expect(
+    page.getByRole("list", { name: /done items/i }).getByText(updatedTitle),
+  ).toBeVisible();
+  await expect(doneCard.getByText(/completed/i)).toBeVisible();
+  await expect(doneCard.getByRole("button", { name: /reopen/i })).toBeVisible();
+  await doneCard.getByRole("button", { name: new RegExp(`delete ${updatedTitle}`, "i") }).click();
+  await expect(doneCard).toHaveCount(0);
 });

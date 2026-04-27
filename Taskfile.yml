@@ -40,10 +40,16 @@ tasks:
         fi'
 
   dev:
-    desc: Run the backend API locally against Postgres
+    desc: Run the shell backend API locally against Postgres
     cmds:
-      - go run ./services/app/cmd/api migrate
-      - go run ./services/app/cmd/api
+      - go run ./services/app-shell migrate
+      - go run ./services/app-shell
+
+  dev:todo:
+    desc: Run the todo backend API locally against Postgres
+    cmds:
+      - go run ./services/app-todo migrate
+      - go run ./services/app-todo
 
   user:create:cluster:
     desc: Provision a user inside the deployed cluster and print the generated password
@@ -53,7 +59,7 @@ tasks:
   test:backend:
     desc: Run backend tests
     cmds:
-      - go test ./services/app/...
+      - go test ./services/app/... ./services/app-shell/... ./services/app-todo/...
 
   test:frontend:
     desc: Run frontend unit tests
@@ -82,7 +88,7 @@ tasks:
   lint:backend:
     desc: Run backend formatting checks
     cmds:
-      - sh -c 'out=$(gofmt -l $(find services/app -name "*.go" -type f)); test -z "$out" || { printf "gofmt required for:\n%s\n" "$out" >&2; exit 1; }'
+      - sh -c 'out=$(gofmt -l $(find services/app services/app-shell services/app-todo -name "*.go" -type f)); test -z "$out" || { printf "gofmt required for:\n%s\n" "$out" >&2; exit 1; }'
 
   lint:frontend:
     desc: Run frontend linting
@@ -98,12 +104,13 @@ tasks:
       - task lint:frontend
 
   build:backend:
-    desc: Build the backend binary
+    desc: Build the shell and todo backend binaries
     cmds:
       - |
         sh -c 'set -eu; \
         mkdir -p .cache/bin; \
-        go build -o .cache/bin/app-api ./services/app/cmd/api'
+        go build -o .cache/bin/app-api ./services/app-shell; \
+        go build -o .cache/bin/todo-api ./services/app-todo'
 
   build:frontend:
     desc: Build the frontend bundle
@@ -119,12 +126,20 @@ tasks:
       - task build:frontend
 
   docker:build:app:
-    desc: Build the backend image with Docker
+    desc: Build the shell backend image with Docker
     cmds:
       - |
         sh -c 'set -eu; \
         ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-app:${IMAGE_TAG:-dev}"; \
-        docker build -f services/app/Dockerfile -t "$ref" .'
+        docker build -f services/app-shell/Dockerfile -t "$ref" .'
+
+  docker:build:todo-api:
+    desc: Build the todo backend image with Docker
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-todo-api:${IMAGE_TAG:-dev}"; \
+        docker build -f services/app-todo/Dockerfile -t "$ref" .'
 
   docker:build:web:
     desc: Build the frontend image with Docker
@@ -146,16 +161,26 @@ tasks:
     desc: Build the backend and frontend images with Docker
     cmds:
       - task docker:build:app
+      - task docker:build:todo-api
       - task docker:build:web
       - task docker:build:web-todo
 
   docker:push:app:
-    desc: Build and push the backend image with Docker
+    desc: Build and push the shell backend image with Docker
     cmds:
       - task docker:build:app
       - |
         sh -c 'set -eu; \
         ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-app:${IMAGE_TAG:-dev}"; \
+        docker push "$ref"'
+
+  docker:push:todo-api:
+    desc: Build and push the todo backend image with Docker
+    cmds:
+      - task docker:build:todo-api
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-todo-api:${IMAGE_TAG:-dev}"; \
         docker push "$ref"'
 
   docker:push:web:
@@ -180,11 +205,12 @@ tasks:
     desc: Build and push the backend and frontend images with Docker
     cmds:
       - task docker:push:app
+      - task docker:push:todo-api
       - task docker:push:web
       - task docker:push:web-todo
 
   image:app:
-    desc: Build and push the backend image with BuildKit
+    desc: Build and push the shell backend image with BuildKit
     cmds:
       - |
         sh -c 'set -eu; \
@@ -193,7 +219,20 @@ tasks:
           --frontend dockerfile.v0 \
           --local context=. \
           --local dockerfile=. \
-          --opt filename=services/app/Dockerfile \
+          --opt filename=services/app-shell/Dockerfile \
+          --output type=image,name="$ref",push=true,registry.insecure=true'
+
+  image:todo-api:
+    desc: Build and push the todo backend image with BuildKit
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-k3d-echo-registry.localhost:5000}/echo-agentic-todo-postfix-20260411210213-todo-api:${IMAGE_TAG:-dev}"; \
+        buildctl-daemonless.sh build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --opt filename=services/app-todo/Dockerfile \
           --output type=image,name="$ref",push=true,registry.insecure=true'
 
   image:web:
@@ -245,6 +284,8 @@ tasks:
           --namespace "$ns" \
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
+          --set-string images.todoApi.repository="$registry/echo-agentic-todo-postfix-20260411210213-todo-api" \
+          --set-string images.todoApi.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
           --set-string images.web.tag="$tag" \
           --set-string images.webTodo.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-todo" \
@@ -254,6 +295,7 @@ tasks:
     desc: Build images with BuildKit, deploy the chart, and refresh the app namespace
     cmds:
       - task image:app
+      - task image:todo-api
       - task image:web
       - task image:web-todo
       - |
@@ -278,14 +320,18 @@ tasks:
           --wait --timeout "${DEPLOY_TIMEOUT:-5m}" \
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
+          --set-string images.todoApi.repository="$registry/echo-agentic-todo-postfix-20260411210213-todo-api" \
+          --set-string images.todoApi.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
           --set-string images.web.tag="$tag" \
           --set-string images.webTodo.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-todo" \
           --set-string images.webTodo.tag="$tag"; \
         kubectl rollout restart deployment/"$release-app" -n "$ns"; \
+        kubectl rollout restart deployment/"$release-todo-api" -n "$ns"; \
         kubectl rollout restart deployment/"$release-web" -n "$ns"; \
         kubectl rollout restart deployment/"$release-web-todo" -n "$ns"; \
         kubectl rollout status deployment/"$release-app" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
+        kubectl rollout status deployment/"$release-todo-api" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-web-todo" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
 
@@ -293,6 +339,7 @@ tasks:
     desc: Build images with Docker, deploy the chart, and refresh the app namespace
     cmds:
       - task docker:push:app
+      - task docker:push:todo-api
       - task docker:push:web
       - task docker:push:web-todo
       - |
@@ -317,14 +364,18 @@ tasks:
           --wait --timeout "${DEPLOY_TIMEOUT:-5m}" \
           --set-string images.app.repository="$registry/echo-agentic-todo-postfix-20260411210213-app" \
           --set-string images.app.tag="$tag" \
+          --set-string images.todoApi.repository="$registry/echo-agentic-todo-postfix-20260411210213-todo-api" \
+          --set-string images.todoApi.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
           --set-string images.web.tag="$tag" \
           --set-string images.webTodo.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-todo" \
           --set-string images.webTodo.tag="$tag"; \
         kubectl rollout restart deployment/"$release-app" -n "$ns"; \
+        kubectl rollout restart deployment/"$release-todo-api" -n "$ns"; \
         kubectl rollout restart deployment/"$release-web" -n "$ns"; \
         kubectl rollout restart deployment/"$release-web-todo" -n "$ns"; \
         kubectl rollout status deployment/"$release-app" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
+        kubectl rollout status deployment/"$release-todo-api" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-web-todo" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
 
@@ -388,7 +439,7 @@ tasks:
         values_file="${K3D_VALUES_FILE:-./deploy/k3d/local.values.yaml}"; \
         default_host="$(awk '\''/^ingress:/{in_ingress=1; next} in_ingress && /^[^[:space:]]/{in_ingress=0} in_ingress && $1 == "host:" { print $2; exit } in_ingress && $1 == "-" { print $2; exit }'\'' "$values_file")"; \
         host="${INGRESS_HOST:-${default_host:-$release.localhost}}"; \
-        printf "frontend: http://%s/\ntodo route: http://%s/todo/\nbackend: http://%s/api/healthz\nremote entry: http://%s/todo/remoteEntry.js\n" "$host" "$host" "$host" "$host"'
+        printf "frontend: http://%s/\ntodo route: http://%s/todo/\nshell backend: http://%s/api/healthz\ntodo api: http://%s/api/todos\nremote entry: http://%s/todo/remoteEntry.js\n" "$host" "$host" "$host" "$host" "$host"'
 
   logs:
     desc: "Stream deployment logs (for example: task logs -- web)"
@@ -417,6 +468,15 @@ tasks:
         ns="${APP_NAMESPACE:-app-system}"; \
         release="${APP_RELEASE_NAME:-app}"; \
         kubectl exec -n "$ns" deployment/"$release-web" -- wget -qO- "http://127.0.0.1/" >/dev/null'
+
+  probe:todo-api:
+    desc: Probe the todo backend health endpoint in-cluster
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ns="${APP_NAMESPACE:-app-system}"; \
+        release="${APP_RELEASE_NAME:-app}"; \
+        kubectl exec -n "$ns" deployment/"$release-todo-api" -- wget -qO- "http://127.0.0.1:8080/healthz"'
 
   probe:app:external:
     desc: Probe the backend health endpoint through ingress from the host
@@ -466,6 +526,7 @@ tasks:
         fi; \
         task "$deploy_target"; \
         task probe:app; \
+        task probe:todo-api; \
         task probe:web; \
         task probe:app:external; \
         task probe:web:external; \

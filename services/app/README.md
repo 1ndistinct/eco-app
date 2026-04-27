@@ -1,12 +1,14 @@
-# App Service
+# Backend Support
 
-`services/app/` is the backend workspace root for this repository.
+`services/app/` now holds backend support code that is not owned by a specific API deployment.
 
 Contents:
-- `cmd/`: executable entrypoints
-- `internal/`: service packages, repositories, migrations, and tests
+- `cmd/worker/`: worker entrypoint
 - `scripts/`: backend helper scripts
-- `Dockerfile`: primary backend container build
 - `docs/go-style.md`: default Go style guide for new and changed backend code
 
-Use repo-root `task` commands for standard workflows. Direct Go package operations should target `./services/app/...`.
+Deployable backend roots live in:
+- `services/app-shell`
+- `services/app-todo`
+
+Use repo-root `task` commands for standard workflows.

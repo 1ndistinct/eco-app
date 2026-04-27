@@ -26,9 +26,9 @@ The agent-oriented BuildKit path uses task deploy and pushes to k3d-echo-registr
 The human Docker path uses task deploy:docker and pushes to localhost:5001 by default so a host Docker daemon can publish into the same local k3d registry.
 Set PUSH_REGISTRY and CLUSTER_REGISTRY together when you want Docker pushes and cluster pulls to use a different registry.
 Use `task k3d:bootstrap` to create the expected `echo` cluster and `echo-registry.localhost` registry on a fresh machine.
-The backend now requires `DATABASE_URL` for local runtime; `task dev` runs the embedded goose migrations first and then starts the API.
-The Helm chart runs the same migration entrypoint as a dedicated Kubernetes Job, and the API waits for the latest migration version before it serves traffic.
-Users are provisioned explicitly. Use `go run ./services/app/cmd/api create-user <email>` against a local database, or `EMAIL=<email> task user:create:cluster` against the deployed cluster. The command prints the generated temporary password, and the user must reset it on first login.
+The backend now requires `DATABASE_URL` for local runtime; `task dev` runs the shell API and `task dev:todo` runs the todo API.
+The Helm chart runs dedicated migration Jobs for the shell and todo services, and each API waits for its owned migration set before it serves traffic.
+Users are provisioned explicitly. Use `go run ./services/app-shell create-user <email>` against a local database, or `EMAIL=<email> task user:create:cluster` against the deployed cluster. The command prints the generated temporary password, and the user must reset it on first login.
 Provisioned users now start with a default `Personal` workspace and can create or delete additional owned workspaces from the UI. Workspace sharing and todos are scoped by workspace ID rather than owner email.
 Google login is optional. Configure these app env vars when you want it:
 - `GOOGLE_OAUTH_CLIENT_ID`

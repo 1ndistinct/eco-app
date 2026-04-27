@@ -370,7 +370,7 @@ describe("App", () => {
     expect(sessionRequestCount).toBe(2);
   });
 
-  it("creates, shares, updates, and deletes todos inside the workspace app", async () => {
+  it("creates, edits, shares, updates, and deletes todos inside the workspace app", async () => {
     fetchMock
       .mockResolvedValueOnce(
         new Response(JSON.stringify(authenticatedSession()), {
@@ -388,6 +388,7 @@ describe("App", () => {
                 completed: false,
                 ownerEmail: "owner@example.com",
                 workspaceId: "workspace-1",
+                createdAt: "2026-04-24T09:00:00.000Z",
               },
             ],
             workspaceId: "workspace-1",
@@ -418,9 +419,26 @@ describe("App", () => {
             completed: false,
             ownerEmail: "owner@example.com",
             workspaceId: "workspace-1",
+            createdAt: "2026-04-25T11:30:00.000Z",
           }),
           {
             status: 201,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: "2",
+            title: "Write invite emails",
+            completed: false,
+            ownerEmail: "owner@example.com",
+            workspaceId: "workspace-1",
+            createdAt: "2026-04-25T11:30:00.000Z",
+          }),
+          {
+            status: 200,
             headers: { "Content-Type": "application/json" },
           },
         ),
@@ -445,6 +463,7 @@ describe("App", () => {
             completed: true,
             ownerEmail: "owner@example.com",
             workspaceId: "workspace-1",
+            createdAt: "2026-04-24T09:00:00.000Z",
           }),
           {
             status: 200,
@@ -457,6 +476,9 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Existing task")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: /todo items/i })).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: /done items/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/created /i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/collaborator email/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /add item/i }));
@@ -465,6 +487,18 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText("Write invite flow")).toBeInTheDocument();
+
+    let createdTodo = screen.getByText("Write invite flow").closest("li");
+    if (!createdTodo) {
+      throw new Error("created todo row not found");
+    }
+    fireEvent.click(within(createdTodo).getByRole("button", { name: /^edit$/i, hidden: true }));
+    fireEvent.change(within(createdTodo).getByLabelText(/todo title/i), {
+      target: { value: "Write invite emails" },
+    });
+    fireEvent.click(within(createdTodo).getByRole("button", { name: /^save$/i, hidden: true }));
+    expect(await screen.findByText("Write invite emails")).toBeInTheDocument();
+    expect(screen.queryByText("Write invite flow")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /open collaborators/i }));
     fireEvent.change(screen.getByLabelText(/collaborator email/i), {
@@ -479,18 +513,26 @@ describe("App", () => {
     }
     fireEvent.click(within(existingTodo).getByRole("button", { name: /mark done/i, hidden: true }));
     await waitFor(() => {
-      expect(
-        within(existingTodo).getByRole("button", { name: /reopen/i, hidden: true }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("list", { name: /done items/i, hidden: true })).toBeInTheDocument();
     });
+    expect(
+      within(screen.getByRole("list", { name: /done items/i, hidden: true })).getByText(
+        "Existing task",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("list", { name: /todo items/i, hidden: true })).queryByText(
+        "Existing task",
+      ),
+    ).not.toBeInTheDocument();
 
-    const createdTodo = screen.getByText("Write invite flow").closest("li");
+    createdTodo = screen.getByText("Write invite emails").closest("li");
     if (!createdTodo) {
       throw new Error("created todo row not found");
     }
     fireEvent.click(within(createdTodo).getByRole("button", { name: /delete/i, hidden: true }));
     await waitFor(() => {
-      expect(screen.queryByText("Write invite flow")).not.toBeInTheDocument();
+      expect(screen.queryByText("Write invite emails")).not.toBeInTheDocument();
     });
 
     expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/todos");
@@ -503,8 +545,17 @@ describe("App", () => {
       }),
     });
 
-    expect(fetchMock.mock.calls[4]?.[0]).toBe("/api/shares");
+    expect(fetchMock.mock.calls[4]?.[0]).toBe("/api/todos/2");
     expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Write invite emails",
+      }),
+    });
+
+    expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/shares");
+    expect(fetchMock.mock.calls[5]?.[1]).toMatchObject({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -513,15 +564,15 @@ describe("App", () => {
       }),
     });
 
-    expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/todos/1");
-    expect(fetchMock.mock.calls[5]?.[1]).toMatchObject({
+    expect(fetchMock.mock.calls[6]?.[0]).toBe("/api/todos/1");
+    expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ completed: true }),
     });
 
-    expect(fetchMock.mock.calls[6]?.[0]).toBe("/api/todos/2");
-    expect(fetchMock.mock.calls[6]?.[1]).toMatchObject({
+    expect(fetchMock.mock.calls[7]?.[0]).toBe("/api/todos/2");
+    expect(fetchMock.mock.calls[7]?.[1]).toMatchObject({
       method: "DELETE",
     });
   });

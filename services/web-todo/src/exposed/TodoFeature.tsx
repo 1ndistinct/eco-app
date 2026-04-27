@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import DoneRoundedIcon from "@mui/icons-material/DoneRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import {
   Alert,
   Box,
@@ -16,6 +17,46 @@ import {
 import { readErrorMessage, TODO_ENDPOINT } from "../app/api";
 import { Todo, TodoFeatureProps, TodoListResponse } from "../app/types";
 
+const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+function parseCreatedAt(createdAt?: string) {
+  if (!createdAt) {
+    return null;
+  }
+
+  const parsed = Date.parse(createdAt);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function compareTodosByCreatedAt(left: Todo, right: Todo) {
+  const leftCreatedAt = parseCreatedAt(left.createdAt);
+  const rightCreatedAt = parseCreatedAt(right.createdAt);
+
+  if (leftCreatedAt !== null && rightCreatedAt !== null && leftCreatedAt !== rightCreatedAt) {
+    return leftCreatedAt - rightCreatedAt;
+  }
+  if (leftCreatedAt !== null && rightCreatedAt === null) {
+    return -1;
+  }
+  if (leftCreatedAt === null && rightCreatedAt !== null) {
+    return 1;
+  }
+
+  return left.id.localeCompare(right.id, undefined, { numeric: true });
+}
+
+function formatCreatedAt(createdAt?: string) {
+  const parsed = parseCreatedAt(createdAt);
+  if (parsed === null) {
+    return null;
+  }
+
+  return `Created ${createdAtFormatter.format(parsed)}`;
+}
+
 export default function TodoFeature({
   workspaceId,
   workspaceName,
@@ -29,9 +70,14 @@ export default function TodoFeature({
   const [isSubmittingTodo, setIsSubmittingTodo] = useState(false);
   const [updatingTodoIds, setUpdatingTodoIds] = useState<string[]>([]);
   const [deletingTodoIds, setDeletingTodoIds] = useState<string[]>([]);
+  const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
+  const [editingTodoTitle, setEditingTodoTitle] = useState("");
 
   const remainingCount = useMemo(() => todos.filter((todo) => !todo.completed).length, [todos]);
   const completedCount = todos.length - remainingCount;
+  const sortedTodos = useMemo(() => [...todos].sort(compareTodosByCreatedAt), [todos]);
+  const openTodos = useMemo(() => sortedTodos.filter((todo) => !todo.completed), [sortedTodos]);
+  const completedTodos = useMemo(() => sortedTodos.filter((todo) => todo.completed), [sortedTodos]);
 
   useEffect(() => {
     let isActive = true;
@@ -43,9 +89,13 @@ export default function TodoFeature({
       setIsAddingTodoInline(false);
       setUpdatingTodoIds([]);
       setDeletingTodoIds([]);
+      setEditingTodoId(null);
+      setEditingTodoTitle("");
 
       try {
-        const response = await fetch(`${TODO_ENDPOINT}?workspace=${encodeURIComponent(workspaceId)}`);
+        const response = await fetch(
+          `${TODO_ENDPOINT}?workspace=${encodeURIComponent(workspaceId)}`,
+        );
         if (!response.ok) {
           throw new Error(await readErrorMessage(response, "Unable to load todos."));
         }
@@ -111,17 +161,18 @@ export default function TodoFeature({
     }
   }
 
-  async function handleToggleTodo(todo: Todo) {
-    setUpdatingTodoIds((current) => [...current, todo.id]);
+  async function handleUpdateTodo(
+    todoId: string,
+    updates: Partial<Pick<Todo, "completed" | "title">>,
+  ) {
+    setUpdatingTodoIds((current) => [...current, todoId]);
     setTodoError(null);
 
     try {
-      const response = await fetch(`${TODO_ENDPOINT}/${todo.id}`, {
+      const response = await fetch(`${TODO_ENDPOINT}/${todoId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          completed: !todo.completed,
-        }),
+        body: JSON.stringify(updates),
       });
 
       if (!response.ok) {
@@ -132,11 +183,48 @@ export default function TodoFeature({
       setTodos((current) =>
         current.map((item) => (item.id === updatedTodo.id ? updatedTodo : item)),
       );
+      return updatedTodo;
     } catch (error) {
       setTodoError(error instanceof Error ? error.message : "Unable to update todo.");
+      return null;
     } finally {
-      setUpdatingTodoIds((current) => current.filter((id) => id !== todo.id));
+      setUpdatingTodoIds((current) => current.filter((id) => id !== todoId));
     }
+  }
+
+  async function handleToggleTodo(todo: Todo) {
+    await handleUpdateTodo(todo.id, {
+      completed: !todo.completed,
+    });
+  }
+
+  function handleStartEditingTodo(todo: Todo) {
+    setEditingTodoId(todo.id);
+    setEditingTodoTitle(todo.title);
+    setTodoError(null);
+  }
+
+  function handleCancelEditingTodo() {
+    setEditingTodoId(null);
+    setEditingTodoTitle("");
+    setTodoError(null);
+  }
+
+  async function handleSubmitTodoEdit(todo: Todo) {
+    const trimmedTitle = editingTodoTitle.trim();
+    if (trimmedTitle === "") {
+      setTodoError("Todo title is required.");
+      return;
+    }
+
+    const updatedTodo = await handleUpdateTodo(todo.id, {
+      title: trimmedTitle,
+    });
+    if (!updatedTodo) {
+      return;
+    }
+
+    handleCancelEditingTodo();
   }
 
   async function handleDeleteTodo(todo: Todo) {
@@ -268,75 +356,269 @@ export default function TodoFeature({
 
         {!isWorkspaceLoading && todos.length > 0 ? (
           <Box className="todo-list-scrollbox">
-            <Box component="ul" className="todo-list" aria-label="Todo items">
-              {todos.map((todo) => {
-                const isUpdating = updatingTodoIds.includes(todo.id);
-                const isDeleting = deletingTodoIds.includes(todo.id);
-                const isMutating = isUpdating || isDeleting;
-                const ownerLabel =
-                  todo.ownerEmail === currentUserEmail
-                    ? "Owned by you"
-                    : `Owned by ${todo.ownerEmail}`;
-                const statusLabel = todo.completed ? "Completed" : "Open";
-
-                return (
-                  <Paper
-                    key={todo.id}
-                    component="li"
-                    elevation={0}
-                    className={`todo-row${todo.completed ? " todo-row-done" : ""}`}
-                    sx={{ opacity: isMutating ? 0.7 : 1 }}
+            <Stack spacing={2.5} className="todo-sections">
+              {openTodos.length > 0 ? (
+                <Stack spacing={1.25} className="todo-section">
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ justifyContent: "space-between", alignItems: "center" }}
                   >
-                    <Stack
-                      direction={{ xs: "column", md: "row" }}
-                      spacing={1.5}
-                      sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography
-                          variant="subtitle1"
-                          className={todo.completed ? "todo-title-done" : undefined}
-                        >
-                          {todo.title}
-                        </Typography>
-                        <Typography color="text.secondary">
-                          {ownerLabel} · {statusLabel}
-                        </Typography>
-                      </Box>
+                    <Typography variant="subtitle1">Todo</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {openTodos.length}
+                    </Typography>
+                  </Stack>
+                  <Box component="ul" className="todo-list" aria-label="Todo items">
+                    {openTodos.map((todo) => {
+                      const isUpdating = updatingTodoIds.includes(todo.id);
+                      const isDeleting = deletingTodoIds.includes(todo.id);
+                      const isMutating = isUpdating || isDeleting;
+                      const isEditing = editingTodoId === todo.id;
+                      const ownerLabel =
+                        todo.ownerEmail === currentUserEmail
+                          ? "Owned by you"
+                          : `Owned by ${todo.ownerEmail}`;
+                      const createdAtLabel = formatCreatedAt(todo.createdAt);
 
-                      <Stack direction="row" spacing={1} className="todo-actions">
-                        <Button
-                          variant={todo.completed ? "outlined" : "contained"}
-                          color={todo.completed ? "inherit" : "success"}
-                          disabled={isMutating}
-                          onClick={() => handleToggleTodo(todo)}
+                      return (
+                        <Paper
+                          key={todo.id}
+                          component="li"
+                          elevation={0}
+                          className="todo-row"
+                          sx={{ opacity: isMutating ? 0.7 : 1 }}
                         >
-                          {isUpdating ? "Saving..." : todo.completed ? "Reopen" : "Mark done"}
-                        </Button>
-                        <Button
-                          variant="text"
-                          color="error"
-                          disabled={isMutating}
-                          onClick={() => handleDeleteTodo(todo)}
-                          aria-label={
-                            isDeleting ? `Deleting ${todo.title}` : `Delete ${todo.title}`
-                          }
-                          startIcon={
-                            isDeleting ? (
-                              <CircularProgress size={16} color="inherit" />
-                            ) : (
-                              <DeleteOutlineRoundedIcon />
-                            )
-                          }
+                          {isEditing ? (
+                            <Box
+                              component="form"
+                              onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                                event.preventDefault();
+                                void handleSubmitTodoEdit(todo);
+                              }}
+                            >
+                              <Stack spacing={1.25}>
+                                <TextField
+                                  label="Todo title"
+                                  value={editingTodoTitle}
+                                  onChange={(event) => setEditingTodoTitle(event.target.value)}
+                                  autoFocus
+                                  disabled={isMutating}
+                                  fullWidth
+                                />
+                                <Stack direction="row" spacing={1} className="todo-actions">
+                                  <Button
+                                    type="submit"
+                                    variant="contained"
+                                    color="primary"
+                                    disabled={isMutating}
+                                  >
+                                    {isUpdating ? "Saving..." : "Save"}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="text"
+                                    color="inherit"
+                                    disabled={isMutating}
+                                    onClick={handleCancelEditingTodo}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </Stack>
+                              </Stack>
+                            </Box>
+                          ) : (
+                            <Stack
+                              direction={{ xs: "column", md: "row" }}
+                              spacing={1.5}
+                              sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}
+                            >
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="subtitle1">{todo.title}</Typography>
+                                <Typography color="text.secondary">
+                                  {[ownerLabel, createdAtLabel].filter(Boolean).join(" · ")}
+                                </Typography>
+                              </Box>
+
+                              <Stack direction="row" spacing={1} className="todo-actions">
+                                <Button
+                                  variant="text"
+                                  color="inherit"
+                                  disabled={isMutating}
+                                  onClick={() => handleStartEditingTodo(todo)}
+                                  startIcon={<EditRoundedIcon />}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  variant="contained"
+                                  color="success"
+                                  disabled={isMutating}
+                                  onClick={() => handleToggleTodo(todo)}
+                                >
+                                  {isUpdating ? "Saving..." : "Mark done"}
+                                </Button>
+                                <Button
+                                  variant="text"
+                                  color="error"
+                                  disabled={isMutating}
+                                  onClick={() => handleDeleteTodo(todo)}
+                                  aria-label={
+                                    isDeleting ? `Deleting ${todo.title}` : `Delete ${todo.title}`
+                                  }
+                                  startIcon={
+                                    isDeleting ? (
+                                      <CircularProgress size={16} color="inherit" />
+                                    ) : (
+                                      <DeleteOutlineRoundedIcon />
+                                    )
+                                  }
+                                >
+                                  {isDeleting ? "Deleting..." : "Delete"}
+                                </Button>
+                              </Stack>
+                            </Stack>
+                          )}
+                        </Paper>
+                      );
+                    })}
+                  </Box>
+                </Stack>
+              ) : null}
+
+              {completedTodos.length > 0 ? (
+                <Stack spacing={1.25} className="todo-section">
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ justifyContent: "space-between", alignItems: "center" }}
+                  >
+                    <Typography variant="subtitle1">Done</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {completedTodos.length}
+                    </Typography>
+                  </Stack>
+                  <Box component="ul" className="todo-list" aria-label="Done items">
+                    {completedTodos.map((todo) => {
+                      const isUpdating = updatingTodoIds.includes(todo.id);
+                      const isDeleting = deletingTodoIds.includes(todo.id);
+                      const isMutating = isUpdating || isDeleting;
+                      const isEditing = editingTodoId === todo.id;
+                      const ownerLabel =
+                        todo.ownerEmail === currentUserEmail
+                          ? "Owned by you"
+                          : `Owned by ${todo.ownerEmail}`;
+                      const createdAtLabel = formatCreatedAt(todo.createdAt);
+
+                      return (
+                        <Paper
+                          key={todo.id}
+                          component="li"
+                          elevation={0}
+                          className="todo-row todo-row-done"
+                          sx={{ opacity: isMutating ? 0.7 : 1 }}
                         >
-                          {isDeleting ? "Deleting..." : "Delete"}
-                        </Button>
-                      </Stack>
-                    </Stack>
-                  </Paper>
-                );
-              })}
-            </Box>
+                          {isEditing ? (
+                            <Box
+                              component="form"
+                              onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                                event.preventDefault();
+                                void handleSubmitTodoEdit(todo);
+                              }}
+                            >
+                              <Stack spacing={1.25}>
+                                <TextField
+                                  label="Todo title"
+                                  value={editingTodoTitle}
+                                  onChange={(event) => setEditingTodoTitle(event.target.value)}
+                                  autoFocus
+                                  disabled={isMutating}
+                                  fullWidth
+                                />
+                                <Stack direction="row" spacing={1} className="todo-actions">
+                                  <Button
+                                    type="submit"
+                                    variant="contained"
+                                    color="primary"
+                                    disabled={isMutating}
+                                  >
+                                    {isUpdating ? "Saving..." : "Save"}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="text"
+                                    color="inherit"
+                                    disabled={isMutating}
+                                    onClick={handleCancelEditingTodo}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </Stack>
+                              </Stack>
+                            </Box>
+                          ) : (
+                            <Stack
+                              direction={{ xs: "column", md: "row" }}
+                              spacing={1.5}
+                              sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}
+                            >
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="subtitle1" className="todo-title-done">
+                                  {todo.title}
+                                </Typography>
+                                <Typography color="text.secondary">
+                                  {[ownerLabel, createdAtLabel, "Completed"]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </Typography>
+                              </Box>
+
+                              <Stack direction="row" spacing={1} className="todo-actions">
+                                <Button
+                                  variant="text"
+                                  color="inherit"
+                                  disabled={isMutating}
+                                  onClick={() => handleStartEditingTodo(todo)}
+                                  startIcon={<EditRoundedIcon />}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  variant="outlined"
+                                  color="inherit"
+                                  disabled={isMutating}
+                                  onClick={() => handleToggleTodo(todo)}
+                                >
+                                  {isUpdating ? "Saving..." : "Reopen"}
+                                </Button>
+                                <Button
+                                  variant="text"
+                                  color="error"
+                                  disabled={isMutating}
+                                  onClick={() => handleDeleteTodo(todo)}
+                                  aria-label={
+                                    isDeleting ? `Deleting ${todo.title}` : `Delete ${todo.title}`
+                                  }
+                                  startIcon={
+                                    isDeleting ? (
+                                      <CircularProgress size={16} color="inherit" />
+                                    ) : (
+                                      <DeleteOutlineRoundedIcon />
+                                    )
+                                  }
+                                >
+                                  {isDeleting ? "Deleting..." : "Delete"}
+                                </Button>
+                              </Stack>
+                            </Stack>
+                          )}
+                        </Paper>
+                      );
+                    })}
+                  </Box>
+                </Stack>
+              ) : null}
+            </Stack>
           </Box>
         ) : null}
       </Stack>

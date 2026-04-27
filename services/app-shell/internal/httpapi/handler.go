@@ -16,7 +16,8 @@ type createTodoRequest struct {
 }
 
 type updateTodoRequest struct {
-	Completed *bool `json:"completed"`
+	Title     *string `json:"title"`
+	Completed *bool   `json:"completed"`
 }
 
 type loginRequest struct {
@@ -63,6 +64,23 @@ type HandlerOptions struct {
 }
 
 func NewHandler(store AppStore, options ...HandlerOptions) http.Handler {
+	return newHandler(store, true, true, options...)
+}
+
+func NewShellHandler(store AppStore, options ...HandlerOptions) http.Handler {
+	return newHandler(store, true, false, options...)
+}
+
+func NewTodoHandler(store AppStore, options ...HandlerOptions) http.Handler {
+	return newHandler(store, false, true, options...)
+}
+
+func newHandler(
+	store AppStore,
+	includeShellRoutes bool,
+	includeTodoRoutes bool,
+	options ...HandlerOptions,
+) http.Handler {
 	var resolved HandlerOptions
 	if len(options) > 0 {
 		resolved = options[0]
@@ -75,17 +93,21 @@ func NewHandler(store AppStore, options ...HandlerOptions) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthzHandler)
 	mux.HandleFunc("/api/healthz", healthzHandler)
-	mux.HandleFunc("/api/auth/session", h.handleSession)
-	mux.HandleFunc("/api/auth/login", h.handleLogin)
-	mux.HandleFunc("/api/auth/google/start", h.handleGoogleLoginStart)
-	mux.HandleFunc("/api/auth/google/callback", h.handleGoogleLoginCallback)
-	mux.HandleFunc("/api/auth/logout", h.handleLogout)
-	mux.HandleFunc("/api/auth/reset-password", h.handleResetPassword)
-	mux.HandleFunc("/api/workspaces", h.handleWorkspaces)
-	mux.HandleFunc("/api/workspaces/", h.handleWorkspace)
-	mux.HandleFunc("/api/todos", h.handleTodos)
-	mux.HandleFunc("/api/todos/", h.handleTodo)
-	mux.HandleFunc("/api/shares", h.handleShares)
+	if includeShellRoutes {
+		mux.HandleFunc("/api/auth/session", h.handleSession)
+		mux.HandleFunc("/api/auth/login", h.handleLogin)
+		mux.HandleFunc("/api/auth/google/start", h.handleGoogleLoginStart)
+		mux.HandleFunc("/api/auth/google/callback", h.handleGoogleLoginCallback)
+		mux.HandleFunc("/api/auth/logout", h.handleLogout)
+		mux.HandleFunc("/api/auth/reset-password", h.handleResetPassword)
+		mux.HandleFunc("/api/workspaces", h.handleWorkspaces)
+		mux.HandleFunc("/api/workspaces/", h.handleWorkspace)
+		mux.HandleFunc("/api/shares", h.handleShares)
+	}
+	if includeTodoRoutes {
+		mux.HandleFunc("/api/todos", h.handleTodos)
+		mux.HandleFunc("/api/todos/", h.handleTodo)
+	}
 	return mux
 }
 
@@ -510,12 +532,23 @@ func (h *handler) handleTodo(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid JSON body"})
 			return
 		}
-		if req.Completed == nil {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "completed is required"})
+		if req.Title == nil && req.Completed == nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "title or completed is required"})
 			return
 		}
 
-		todo, err := h.store.UpdateCompleted(r.Context(), user.Email, id, *req.Completed)
+		var title *string
+		if req.Title != nil {
+			trimmedTitle := strings.TrimSpace(*req.Title)
+			if trimmedTitle == "" {
+				writeJSON(w, http.StatusBadRequest, errorResponse{Error: "title is required"})
+				return
+			}
+
+			title = &trimmedTitle
+		}
+
+		todo, err := h.store.UpdateTodo(r.Context(), user.Email, id, title, req.Completed)
 		if errors.Is(err, ErrTodoNotFound) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "todo not found"})
 			return

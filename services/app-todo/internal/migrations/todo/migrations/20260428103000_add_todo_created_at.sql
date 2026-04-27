@@ -1,0 +1,13 @@
+-- +goose Up
+ALTER TABLE todos
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE todos
+  ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+
+-- +goose Down
+ALTER TABLE todos
+  DROP COLUMN IF EXISTS edited_at;
+
+ALTER TABLE todos
+  DROP COLUMN IF EXISTS created_at;

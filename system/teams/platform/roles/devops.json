@@ -9,7 +9,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]
+          "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app-shell/Dockerfile", "services/app-todo/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]
         },
         {
           "type": "task_target_exists",
@@ -35,7 +35,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]
+          "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app-shell/Dockerfile", "services/app-todo/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]
         },
         {
           "type": "task_target_exists",
@@ -61,7 +61,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]
+          "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app-shell/Dockerfile", "services/app-todo/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]
         },
         {
           "type": "task_target_exists",
@@ -88,7 +88,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]
+          "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app-shell/Dockerfile", "services/app-todo/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]
         },
         {
           "type": "task_target_exists",
@@ -110,7 +110,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]
+          "match_any": ["deploy/**", "Taskfile.yml", "Tiltfile", "services/app-shell/Dockerfile", "services/app-todo/Dockerfile", "services/web/Dockerfile", "services/web/nginx/**"]
         },
         {
           "type": "task_target_exists",

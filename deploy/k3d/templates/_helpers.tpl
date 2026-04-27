@@ -10,6 +10,10 @@
 {{ include "app.fullname" . }}-app
 {{- end -}}
 
+{{- define "app.todoApiServiceName" -}}
+{{ include "app.fullname" . }}-todo-api
+{{- end -}}
+
 {{- define "app.webServiceName" -}}
 {{ include "app.fullname" . }}-web
 {{- end -}}
@@ -28,6 +32,10 @@
 
 {{- define "app.appMigrationJobName" -}}
 {{ include "app.fullname" . }}-app-migrate-{{ .Release.Revision }}
+{{- end -}}
+
+{{- define "app.todoApiMigrationJobName" -}}
+{{ include "app.fullname" . }}-todo-api-migrate-{{ .Release.Revision }}
 {{- end -}}
 
 {{- define "app.databaseURL" -}}

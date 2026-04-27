@@ -27,6 +27,30 @@ func TestHandlerHealthz(t *testing.T) {
 	}
 }
 
+func TestShellHandlerDoesNotExposeTodoRoutes(t *testing.T) {
+	handler := NewShellHandler(newMemoryStore())
+
+	req := httptest.NewRequest(http.MethodGet, "/api/todos", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected shell handler to return 404 for todo routes, got %d", rec.Code)
+	}
+}
+
+func TestTodoHandlerDoesNotExposeShellRoutes(t *testing.T) {
+	handler := NewTodoHandler(newMemoryStore())
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected todo handler to return 404 for shell routes, got %d", rec.Code)
+	}
+}
+
 func TestSessionStartsUnauthenticatedAndAuthenticatesAfterLogin(t *testing.T) {
 	store := newMemoryStore()
 	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
@@ -243,9 +267,15 @@ func TestAuthenticatedUserCreatesTodoInOwnWorkspace(t *testing.T) {
 	if todo.OwnerEmail != "owner@example.com" || todo.WorkspaceID != workspace.ID || todo.Title != "Ship auth flow" || todo.Completed {
 		t.Fatalf("unexpected create body: %+v", todo)
 	}
+	if todo.CreatedAt.IsZero() {
+		t.Fatalf("expected create body to include createdAt: %+v", todo)
+	}
+	if todo.EditedAt != nil {
+		t.Fatalf("expected create body to omit editedAt until the todo changes: %+v", todo)
+	}
 }
 
-func TestSharedWorkspaceCollaboratorCanViewUpdateAndDeleteOwnerTodos(t *testing.T) {
+func TestSharedWorkspaceCollaboratorCanViewEditUpdateAndDeleteOwnerTodos(t *testing.T) {
 	store := newMemoryStore()
 	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
 		t.Fatalf("seed owner: %v", err)
@@ -288,8 +318,35 @@ func TestSharedWorkspaceCollaboratorCanViewUpdateAndDeleteOwnerTodos(t *testing.
 	if listRec.Code != http.StatusOK {
 		t.Fatalf("unexpected collaborator list status: %d body=%s", listRec.Code, listRec.Body.String())
 	}
-	if !strings.Contains(listRec.Body.String(), `"ownerEmail":"owner@example.com"`) {
-		t.Fatalf("expected owner-owned todo, got %q", listRec.Body.String())
+	var listResp todoListResponse
+	if err := json.Unmarshal(listRec.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode collaborator list body: %v", err)
+	}
+	if len(listResp.Items) != 1 || listResp.Items[0].OwnerEmail != "owner@example.com" {
+		t.Fatalf("expected owner-owned todo, got %+v", listResp)
+	}
+	if listResp.Items[0].CreatedAt.IsZero() {
+		t.Fatalf("expected collaborator list item to include createdAt: %+v", listResp.Items[0])
+	}
+
+	editReq := httptest.NewRequest(http.MethodPatch, "/api/todos/1", strings.NewReader(`{"title":"Shared queue updated"}`))
+	editReq.Header.Set("Content-Type", "application/json")
+	editReq.AddCookie(collabCookie)
+	editRec := httptest.NewRecorder()
+	handler.ServeHTTP(editRec, editReq)
+
+	if editRec.Code != http.StatusOK {
+		t.Fatalf("unexpected collaborator edit status: %d body=%s", editRec.Code, editRec.Body.String())
+	}
+	var editedTodo Todo
+	if err := json.Unmarshal(editRec.Body.Bytes(), &editedTodo); err != nil {
+		t.Fatalf("decode collaborator edit body: %v", err)
+	}
+	if editedTodo.Title != "Shared queue updated" || editedTodo.Completed || editedTodo.WorkspaceID != ownerWorkspace.ID {
+		t.Fatalf("unexpected collaborator edit body: %+v", editedTodo)
+	}
+	if editedTodo.EditedAt == nil || editedTodo.EditedAt.IsZero() {
+		t.Fatalf("expected collaborator edit to include editedAt: %+v", editedTodo)
 	}
 
 	updateReq := httptest.NewRequest(http.MethodPatch, "/api/todos/1", strings.NewReader(`{"completed":true}`))
@@ -305,8 +362,11 @@ func TestSharedWorkspaceCollaboratorCanViewUpdateAndDeleteOwnerTodos(t *testing.
 	if err := json.Unmarshal(updateRec.Body.Bytes(), &updatedTodo); err != nil {
 		t.Fatalf("decode collaborator update body: %v", err)
 	}
-	if !updatedTodo.Completed || updatedTodo.WorkspaceID != ownerWorkspace.ID {
+	if !updatedTodo.Completed || updatedTodo.Title != "Shared queue updated" || updatedTodo.WorkspaceID != ownerWorkspace.ID {
 		t.Fatalf("unexpected collaborator update body: %+v", updatedTodo)
+	}
+	if updatedTodo.EditedAt == nil || updatedTodo.EditedAt.IsZero() {
+		t.Fatalf("expected collaborator update to include editedAt: %+v", updatedTodo)
 	}
 
 	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/todos/1", nil)

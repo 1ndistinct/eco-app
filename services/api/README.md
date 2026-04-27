@@ -139,6 +139,7 @@ Todos are scoped to a named workspace. Each todo keeps both:
       "id": "1",
       "title": "Write backend first",
       "completed": false,
+      "createdAt": "2026-04-28T10:30:00Z",
       "ownerEmail": "owner@example.com",
       "workspaceId": "1"
     }
@@ -162,6 +163,7 @@ Todos are scoped to a named workspace. Each todo keeps both:
   "id": "1",
   "title": "Write backend first",
   "completed": false,
+  "createdAt": "2026-04-28T10:30:00Z",
   "ownerEmail": "owner@example.com",
   "workspaceId": "1"
 }
@@ -173,20 +175,23 @@ Todos are scoped to a named workspace. Each todo keeps both:
 ### `PATCH /api/todos/{id}`
 - request: `application/json`
 ```json
-{"completed":true}
+{"title":"Write backend first today","completed":true}
 ```
 - response: `200 application/json`
 ```json
 {
   "id": "1",
-  "title": "Write backend first",
+  "title": "Write backend first today",
   "completed": true,
+  "createdAt": "2026-04-28T10:30:00Z",
+  "editedAt": "2026-04-28T11:15:00Z",
   "ownerEmail": "owner@example.com",
   "workspaceId": "1"
 }
 ```
 - validation:
-  - `completed` is required
+  - at least one of `title` or `completed` is required
+  - `title`, when provided, must be non-empty after trimming whitespace
 - error responses:
   - `401 application/json`
 ```json
@@ -281,5 +286,5 @@ Todos are scoped to a named workspace. Each todo keeps both:
 - Passwords are stored as hashes only.
 - Schema changes are managed with embedded goose migrations.
 - The Helm deploy runs migrations in a dedicated Job, and the app waits for the latest migration before serving traffic.
-- Provision a user locally with `go run ./services/app/cmd/api create-user <email>`.
+- Provision a user locally with `go run ./services/app-shell create-user <email>`.
 - Provision a user in the cluster with `EMAIL=<email> task user:create:cluster`.

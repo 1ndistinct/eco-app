@@ -17,6 +17,8 @@ deploy_deps = [
   "deploy/helm",
   "deploy/k3d",
   "services/app",
+  "services/app-shell",
+  "services/app-todo",
   "services/web",
   "services/web-todo",
 ]
@@ -97,6 +99,14 @@ local_resource(
 local_resource(
   "logs-app",
   "task logs -- app",
+  trigger_mode=TRIGGER_MODE_MANUAL,
+  auto_init=False,
+  allow_parallel=True,
+)
+
+local_resource(
+  "logs-todo-api",
+  "task logs -- todo-api",
   trigger_mode=TRIGGER_MODE_MANUAL,
   auto_init=False,
   allow_parallel=True,

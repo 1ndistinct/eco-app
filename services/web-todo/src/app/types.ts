@@ -8,6 +8,8 @@ export type Todo = {
   completed: boolean;
   ownerEmail: string;
   workspaceId: string;
+  createdAt?: string;
+  editedAt?: string;
 };
 
 export type TodoListResponse = {

@@ -12,6 +12,11 @@ spec:
 {{- end }}
   routes:
     - kind: Rule
+      match: Host(`{{ $host }}`) && (Path(`/api/todos`) || PathPrefix(`/api/todos/`))
+      services:
+        - name: {{ include "app.todoApiServiceName" . }}
+          port: {{ .Values.service.appPort }}
+    - kind: Rule
       match: Host(`{{ $host }}`) && PathPrefix(`{{ .Values.ingress.apiPathPrefix }}`)
       services:
         - name: {{ include "app.appServiceName" . }}

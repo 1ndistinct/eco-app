@@ -406,10 +406,18 @@ func (s *PostgresStore) ListTodos(ctx context.Context, actorEmail string, worksp
 	}
 
 	query, args, err := s.builder.
-		Select("id::text AS id", "title", "completed", "owner_email", "workspace_id::text AS workspace_id").
+		Select(
+			"id::text AS id",
+			"title",
+			"completed",
+			"owner_email",
+			"workspace_id::text AS workspace_id",
+			"created_at",
+			"edited_at",
+		).
 		From("todos").
 		Where(sq.Eq{"workspace_id": numericWorkspaceID}).
-		OrderBy("id ASC").
+		OrderBy("created_at ASC", "id ASC").
 		ToSql()
 	if err != nil {
 		return nil, err
@@ -449,7 +457,9 @@ func (s *PostgresStore) CreateTodo(ctx context.Context, actorEmail string, works
 		Insert("todos").
 		Columns("workspace_id", "workspace_email", "owner_email", "title").
 		Values(numericWorkspaceID, workspace.OwnerEmail, normalizedActorEmail, title).
-		Suffix("RETURNING id::text AS id, title, completed, owner_email, workspace_id::text AS workspace_id").
+		Suffix(
+			"RETURNING id::text AS id, title, completed, owner_email, workspace_id::text AS workspace_id, created_at, edited_at",
+		).
 		ToSql()
 	if err != nil {
 		return Todo{}, err
@@ -463,7 +473,13 @@ func (s *PostgresStore) CreateTodo(ctx context.Context, actorEmail string, works
 	return todo, nil
 }
 
-func (s *PostgresStore) UpdateCompleted(ctx context.Context, actorEmail string, id string, completed bool) (Todo, error) {
+func (s *PostgresStore) UpdateTodo(
+	ctx context.Context,
+	actorEmail string,
+	id string,
+	title *string,
+	completed *bool,
+) (Todo, error) {
 	numericID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		return Todo{}, ErrTodoNotFound
@@ -482,11 +498,20 @@ func (s *PostgresStore) UpdateCompleted(ctx context.Context, actorEmail string, 
 		return Todo{}, err
 	}
 
-	query, args, err := s.builder.
-		Update("todos").
-		Set("completed", completed).
+	updateBuilder := s.builder.Update("todos")
+	if title != nil {
+		updateBuilder = updateBuilder.Set("title", *title)
+	}
+	if completed != nil {
+		updateBuilder = updateBuilder.Set("completed", *completed)
+	}
+	updateBuilder = updateBuilder.Set("edited_at", sq.Expr("NOW()"))
+
+	query, args, err := updateBuilder.
 		Where(sq.Eq{"id": numericID}).
-		Suffix("RETURNING id::text AS id, title, completed, owner_email, workspace_id::text AS workspace_id").
+		Suffix(
+			"RETURNING id::text AS id, title, completed, owner_email, workspace_id::text AS workspace_id, created_at, edited_at",
+		).
 		ToSql()
 	if err != nil {
 		return Todo{}, err

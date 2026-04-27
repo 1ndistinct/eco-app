@@ -3,14 +3,17 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 type Todo struct {
-	ID          string `json:"id" db:"id"`
-	Title       string `json:"title" db:"title"`
-	Completed   bool   `json:"completed" db:"completed"`
-	OwnerEmail  string `json:"ownerEmail" db:"owner_email"`
-	WorkspaceID string `json:"workspaceId" db:"workspace_id"`
+	ID          string     `json:"id" db:"id"`
+	Title       string     `json:"title" db:"title"`
+	Completed   bool       `json:"completed" db:"completed"`
+	OwnerEmail  string     `json:"ownerEmail" db:"owner_email"`
+	WorkspaceID string     `json:"workspaceId" db:"workspace_id"`
+	CreatedAt   time.Time  `json:"createdAt" db:"created_at"`
+	EditedAt    *time.Time `json:"editedAt,omitempty" db:"edited_at"`
 }
 
 type SessionUser struct {
@@ -60,7 +63,13 @@ type AppStore interface {
 	DeleteWorkspaceShare(ctx context.Context, actorEmail string, workspaceID string, shareWithEmail string) error
 	ListTodos(ctx context.Context, actorEmail string, workspaceID string) ([]Todo, error)
 	CreateTodo(ctx context.Context, actorEmail string, workspaceID string, title string) (Todo, error)
-	UpdateCompleted(ctx context.Context, actorEmail string, id string, completed bool) (Todo, error)
+	UpdateTodo(
+		ctx context.Context,
+		actorEmail string,
+		id string,
+		title *string,
+		completed *bool,
+	) (Todo, error)
 	DeleteTodo(ctx context.Context, actorEmail string, id string) error
 	ProvisionUser(ctx context.Context, email string) (ProvisionedUser, error)
 }
