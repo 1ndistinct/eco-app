@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -57,10 +59,12 @@ type shareListResponse struct {
 type handler struct {
 	store      AppStore
 	googleAuth GoogleAuthConfig
+	todoEvents *TodoEventBroker
 }
 
 type HandlerOptions struct {
 	GoogleAuth GoogleAuthConfig
+	TodoEvents *TodoEventBroker
 }
 
 func NewHandler(store AppStore, options ...HandlerOptions) http.Handler {
@@ -89,6 +93,7 @@ func newHandler(
 	h := &handler{
 		store:      store,
 		googleAuth: resolved.GoogleAuth,
+		todoEvents: resolved.TodoEvents,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthzHandler)
@@ -106,6 +111,7 @@ func newHandler(
 	}
 	if includeTodoRoutes {
 		mux.HandleFunc("/api/todos", h.handleTodos)
+		mux.HandleFunc("/api/todos/stream", h.handleTodoStream)
 		mux.HandleFunc("/api/todos/", h.handleTodo)
 	}
 	return mux
@@ -506,10 +512,93 @@ func (h *handler) handleTodos(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
 			return
 		}
+		h.publishTodoEvent(r.Context(), TodoEvent{
+			Type:        TodoEventTypeCreated,
+			WorkspaceID: todo.WorkspaceID,
+			TodoID:      todo.ID,
+		})
 		writeJSON(w, http.StatusCreated, todo)
 	default:
 		w.Header().Set("Allow", "GET, POST")
 		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+	}
+}
+
+func (h *handler) handleTodoStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		writeJSON(w, http.StatusMethodNotAllowed, errorResponse{Error: "method not allowed"})
+		return
+	}
+
+	user, ok := h.requireReadySession(w, r)
+	if !ok {
+		return
+	}
+
+	if h.todoEvents == nil {
+		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "todo event stream unavailable"})
+		return
+	}
+
+	workspaceID, err := h.workspaceFromQuery(r.Context(), r, user.Email)
+	if errors.Is(err, ErrWorkspaceAccessDenied) {
+		writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+		return
+	}
+	if err := h.ensureWorkspaceAccess(r.Context(), user.Email, workspaceID); errors.Is(err, ErrWorkspaceAccessDenied) {
+		writeJSON(w, http.StatusForbidden, errorResponse{Error: "workspace access denied"})
+		return
+	} else if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "streaming unsupported"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	if _, err := w.Write([]byte(": connected\n\n")); err != nil {
+		return
+	}
+	flusher.Flush()
+
+	events, unsubscribe := h.todoEvents.Subscribe(workspaceID)
+	defer unsubscribe()
+
+	heartbeat := time.NewTicker(25 * time.Second)
+	defer heartbeat.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			if err := writeSSEEvent(w, event); err != nil {
+				return
+			}
+			flusher.Flush()
+		case <-heartbeat.C:
+			if _, err := w.Write([]byte(": keepalive\n\n")); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
 	}
 }
 
@@ -561,10 +650,15 @@ func (h *handler) handleTodo(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
 			return
 		}
+		h.publishTodoEvent(r.Context(), TodoEvent{
+			Type:        TodoEventTypeUpdated,
+			WorkspaceID: todo.WorkspaceID,
+			TodoID:      todo.ID,
+		})
 
 		writeJSON(w, http.StatusOK, todo)
 	case http.MethodDelete:
-		err := h.store.DeleteTodo(r.Context(), user.Email, id)
+		deletedTodo, err := h.store.DeleteTodo(r.Context(), user.Email, id)
 		if errors.Is(err, ErrTodoNotFound) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "todo not found"})
 			return
@@ -577,6 +671,11 @@ func (h *handler) handleTodo(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
 			return
 		}
+		h.publishTodoEvent(r.Context(), TodoEvent{
+			Type:        TodoEventTypeDeleted,
+			WorkspaceID: deletedTodo.WorkspaceID,
+			TodoID:      deletedTodo.ID,
+		})
 
 		w.WriteHeader(http.StatusNoContent)
 	default:
@@ -783,6 +882,34 @@ func (h *handler) workspaceFromBody(ctx context.Context, value string, fallbackU
 	return workspaces[0].ID, nil
 }
 
+func (h *handler) ensureWorkspaceAccess(ctx context.Context, userEmail string, workspaceID string) error {
+	if strings.TrimSpace(workspaceID) == "" {
+		return ErrWorkspaceAccessDenied
+	}
+
+	workspaces, err := h.store.ListAccessibleWorkspaces(ctx, userEmail)
+	if err != nil {
+		return err
+	}
+	for _, workspace := range workspaces {
+		if workspace.ID == workspaceID {
+			return nil
+		}
+	}
+
+	return ErrWorkspaceAccessDenied
+}
+
+func (h *handler) publishTodoEvent(ctx context.Context, event TodoEvent) {
+	if h.todoEvents == nil {
+		return
+	}
+
+	if err := h.todoEvents.Publish(ctx, event); err != nil {
+		log.Printf("todo events: publish %s for workspace %s todo %s: %v", event.Type, event.WorkspaceID, event.TodoID, err)
+	}
+}
+
 func healthzHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
@@ -792,4 +919,23 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func writeSSEEvent(w http.ResponseWriter, event TodoEvent) error {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	if _, err := w.Write([]byte("data: ")); err != nil {
+		return err
+	}
+	if _, err := w.Write(payload); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte("\n\n")); err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -152,6 +152,17 @@ Todos are scoped to a named workspace. Each todo keeps both:
   - password reset must already be completed
   - caller must own or have access to the requested workspace
 
+### `GET /api/todos/stream?workspace=1`
+- response: `200 text/event-stream`
+- requirements:
+  - authenticated session required
+  - password reset must already be completed
+  - caller must own or have access to the requested workspace
+- behavior:
+  - opens a long-lived SSE connection for todo changes in the workspace
+  - emits JSON `data:` payloads with `type`, `workspaceId`, `todoId`, and `occurredAt`
+  - current event types are `todo.created`, `todo.updated`, and `todo.deleted`
+
 ### `POST /api/todos`
 - request: `application/json`
 ```json

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
@@ -34,13 +35,23 @@ func main() {
 		return
 	}
 
+	todoEvents, err := httpapi.NewTodoEventBroker(strings.TrimSpace(os.Getenv("NATS_URL")))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		if err := todoEvents.Close(); err != nil {
+			log.Printf("close todo event broker: %v", err)
+		}
+	}()
+
 	if err := apiruntime.WaitForMigrationSets(ctx, db, shellmigrations.Spec(), todomigrations.Spec()); err != nil {
 		log.Fatal(err)
 	}
 
 	server := &http.Server{
 		Addr:    ":8080",
-		Handler: httpapi.NewTodoHandler(store),
+		Handler: httpapi.NewTodoHandler(store, httpapi.HandlerOptions{TodoEvents: todoEvents}),
 	}
 	log.Printf("todo api listening on %s", server.Addr)
 	log.Fatal(server.ListenAndServe())

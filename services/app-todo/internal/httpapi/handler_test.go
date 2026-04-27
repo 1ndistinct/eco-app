@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -272,6 +274,126 @@ func TestAuthenticatedUserCreatesTodoInOwnWorkspace(t *testing.T) {
 	}
 	if todo.EditedAt != nil {
 		t.Fatalf("expected create body to omit editedAt until the todo changes: %+v", todo)
+	}
+}
+
+func TestTodoStreamReceivesMutationEvents(t *testing.T) {
+	store := newMemoryStore()
+	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	workspaces, err := store.ListAccessibleWorkspaces(t.Context(), "owner@example.com")
+	if err != nil {
+		t.Fatalf("list workspaces: %v", err)
+	}
+	if len(workspaces) == 0 {
+		t.Fatal("expected at least one workspace")
+	}
+
+	sessionToken, err := store.CreateSession(t.Context(), "owner@example.com")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	todoEvents, err := NewTodoEventBroker("")
+	if err != nil {
+		t.Fatalf("create todo events: %v", err)
+	}
+	defer func() {
+		if err := todoEvents.Close(); err != nil {
+			t.Fatalf("close todo events: %v", err)
+		}
+	}()
+
+	server := httptest.NewServer(NewHandler(store, HandlerOptions{TodoEvents: todoEvents}))
+	defer server.Close()
+
+	streamCtx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	streamReq, err := http.NewRequestWithContext(
+		streamCtx,
+		http.MethodGet,
+		server.URL+"/api/todos/stream?workspace="+url.QueryEscape(workspaces[0].ID),
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("create stream request: %v", err)
+	}
+	streamReq.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken})
+
+	streamResp, err := server.Client().Do(streamReq)
+	if err != nil {
+		t.Fatalf("open todo stream: %v", err)
+	}
+	defer streamResp.Body.Close()
+
+	if streamResp.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected stream status: %d", streamResp.StatusCode)
+	}
+	if contentType := streamResp.Header.Get("Content-Type"); !strings.Contains(contentType, "text/event-stream") {
+		t.Fatalf("unexpected stream content type: %q", contentType)
+	}
+
+	reader := bufio.NewReader(streamResp.Body)
+	connectedLine, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read connected line: %v", err)
+	}
+	if strings.TrimSpace(connectedLine) != ": connected" {
+		t.Fatalf("unexpected connected line: %q", connectedLine)
+	}
+	if blankLine, err := reader.ReadString('\n'); err != nil {
+		t.Fatalf("read connected separator: %v", err)
+	} else if strings.TrimSpace(blankLine) != "" {
+		t.Fatalf("unexpected connected separator: %q", blankLine)
+	}
+
+	createReq, err := http.NewRequest(
+		http.MethodPost,
+		server.URL+"/api/todos",
+		strings.NewReader(`{"title":"Ship realtime updates","workspaceId":"`+workspaces[0].ID+`"}`),
+	)
+	if err != nil {
+		t.Fatalf("create todo request: %v", err)
+	}
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.AddCookie(&http.Cookie{Name: sessionCookieName, Value: sessionToken})
+
+	createResp, err := server.Client().Do(createReq)
+	if err != nil {
+		t.Fatalf("create todo: %v", err)
+	}
+	defer createResp.Body.Close()
+	if createResp.StatusCode != http.StatusCreated {
+		t.Fatalf("unexpected create status: %d", createResp.StatusCode)
+	}
+
+	var event TodoEvent
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read stream line: %v", err)
+		}
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(line, "data: "))), &event); err != nil {
+			t.Fatalf("decode stream event: %v", err)
+		}
+		break
+	}
+
+	if event.Type != TodoEventTypeCreated {
+		t.Fatalf("unexpected event type: %+v", event)
+	}
+	if event.WorkspaceID != workspaces[0].ID {
+		t.Fatalf("unexpected workspace id: %+v", event)
+	}
+	if event.TodoID == "" {
+		t.Fatalf("expected todo id in event: %+v", event)
 	}
 }
 

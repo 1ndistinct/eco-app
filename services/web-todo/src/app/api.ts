@@ -1,6 +1,7 @@
 import { ApiError } from "./types";
 
 export const TODO_ENDPOINT = "/api/todos";
+export const TODO_STREAM_ENDPOINT = "/api/todos/stream";
 
 export async function readErrorMessage(response: Response, fallback: string) {
   try {

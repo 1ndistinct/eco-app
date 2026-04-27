@@ -14,7 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 
-import { readErrorMessage, TODO_ENDPOINT } from "../app/api";
+import { readErrorMessage, TODO_ENDPOINT, TODO_STREAM_ENDPOINT } from "../app/api";
 import { Todo, TodoFeatureProps, TodoListResponse } from "../app/types";
 
 const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
@@ -57,6 +57,16 @@ function formatCreatedAt(createdAt?: string) {
   return `Created ${createdAtFormatter.format(parsed)}`;
 }
 
+async function fetchTodosForWorkspace(workspaceId: string) {
+  const response = await fetch(`${TODO_ENDPOINT}?workspace=${encodeURIComponent(workspaceId)}`);
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "Unable to load todos."));
+  }
+
+  const data = (await response.json()) as Partial<TodoListResponse>;
+  return Array.isArray(data.items) ? data.items : [];
+}
+
 export default function TodoFeature({
   workspaceId,
   workspaceName,
@@ -93,19 +103,12 @@ export default function TodoFeature({
       setEditingTodoTitle("");
 
       try {
-        const response = await fetch(
-          `${TODO_ENDPOINT}?workspace=${encodeURIComponent(workspaceId)}`,
-        );
-        if (!response.ok) {
-          throw new Error(await readErrorMessage(response, "Unable to load todos."));
-        }
-
-        const data = (await response.json()) as Partial<TodoListResponse>;
+        const items = await fetchTodosForWorkspace(workspaceId);
         if (!isActive) {
           return;
         }
 
-        setTodos(Array.isArray(data.items) ? data.items : []);
+        setTodos(items);
       } catch (error) {
         if (!isActive) {
           return;
@@ -122,6 +125,42 @@ export default function TodoFeature({
 
     return () => {
       isActive = false;
+    };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (typeof EventSource === "undefined") {
+      return;
+    }
+
+    let isActive = true;
+    const eventSource = new EventSource(
+      `${TODO_STREAM_ENDPOINT}?workspace=${encodeURIComponent(workspaceId)}`,
+    );
+
+    eventSource.onmessage = () => {
+      void (async () => {
+        try {
+          const items = await fetchTodosForWorkspace(workspaceId);
+          if (!isActive) {
+            return;
+          }
+
+          setTodoError(null);
+          setTodos(items);
+        } catch (error) {
+          if (!isActive) {
+            return;
+          }
+
+          setTodoError(error instanceof Error ? error.message : "Unable to load todos.");
+        }
+      })();
+    };
+
+    return () => {
+      isActive = false;
+      eventSource.close();
     };
   }, [workspaceId]);
 

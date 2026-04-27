@@ -21,8 +21,6 @@ spec:
           env:
             - name: DATABASE_URL
               value: {{ include "app.databaseURL" . | quote }}
-            - name: NATS_URL
-              value: "nats://{{ include "app.natsServiceName" . }}:{{ .Values.nats.port }}"
             - name: GOOGLE_OAUTH_CLIENT_ID
               value: {{ .Values.googleOAuth.clientID | quote }}
             - name: GOOGLE_OAUTH_CLIENT_SECRET

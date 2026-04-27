@@ -470,7 +470,7 @@ func (s *memoryStore) UpdateTodo(
 	return Todo{}, ErrTodoNotFound
 }
 
-func (s *memoryStore) DeleteTodo(_ context.Context, actorEmail string, id string) error {
+func (s *memoryStore) DeleteTodo(_ context.Context, actorEmail string, id string) (DeletedTodo, error) {
 	normalizedActorEmail := normalizeEmail(actorEmail)
 
 	s.mu.Lock()
@@ -481,14 +481,17 @@ func (s *memoryStore) DeleteTodo(_ context.Context, actorEmail string, id string
 			continue
 		}
 		if !s.hasAccessLocked(normalizedActorEmail, todo.WorkspaceID) {
-			return ErrWorkspaceAccessDenied
+			return DeletedTodo{}, ErrWorkspaceAccessDenied
 		}
 
 		s.todos = append(s.todos[:index], s.todos[index+1:]...)
-		return nil
+		return DeletedTodo{
+			ID:          todo.ID,
+			WorkspaceID: todo.WorkspaceID,
+		}, nil
 	}
 
-	return ErrTodoNotFound
+	return DeletedTodo{}, ErrTodoNotFound
 }
 
 func (s *memoryStore) ProvisionUser(_ context.Context, email string) (ProvisionedUser, error) {

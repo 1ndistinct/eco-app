@@ -527,23 +527,23 @@ func (s *PostgresStore) UpdateTodo(
 	return todo, nil
 }
 
-func (s *PostgresStore) DeleteTodo(ctx context.Context, actorEmail string, id string) error {
+func (s *PostgresStore) DeleteTodo(ctx context.Context, actorEmail string, id string) (DeletedTodo, error) {
 	numericID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		return ErrTodoNotFound
+		return DeletedTodo{}, ErrTodoNotFound
 	}
 
 	var workspaceID sql.NullInt64
 	if err := s.db.GetContext(ctx, &workspaceID, `SELECT workspace_id FROM todos WHERE id = $1`, numericID); errors.Is(err, sql.ErrNoRows) {
-		return ErrTodoNotFound
+		return DeletedTodo{}, ErrTodoNotFound
 	} else if err != nil {
-		return err
+		return DeletedTodo{}, err
 	}
 	if !workspaceID.Valid {
-		return ErrTodoNotFound
+		return DeletedTodo{}, ErrTodoNotFound
 	}
 	if err := s.authorizeWorkspace(ctx, normalizeEmail(actorEmail), workspaceID.Int64); err != nil {
-		return err
+		return DeletedTodo{}, err
 	}
 
 	query, args, err := s.builder.
@@ -551,23 +551,26 @@ func (s *PostgresStore) DeleteTodo(ctx context.Context, actorEmail string, id st
 		Where(sq.Eq{"id": numericID}).
 		ToSql()
 	if err != nil {
-		return err
+		return DeletedTodo{}, err
 	}
 
 	result, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
-		return err
+		return DeletedTodo{}, err
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return DeletedTodo{}, err
 	}
 	if rowsAffected == 0 {
-		return ErrTodoNotFound
+		return DeletedTodo{}, ErrTodoNotFound
 	}
 
-	return nil
+	return DeletedTodo{
+		ID:          id,
+		WorkspaceID: strconv.FormatInt(workspaceID.Int64, 10),
+	}, nil
 }
 
 func (s *PostgresStore) ProvisionUser(ctx context.Context, email string) (ProvisionedUser, error) {

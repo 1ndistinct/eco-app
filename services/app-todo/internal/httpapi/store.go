@@ -39,6 +39,11 @@ type ProvisionedUser struct {
 	Password string
 }
 
+type DeletedTodo struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspaceId"`
+}
+
 type SessionState struct {
 	Authenticated        bool              `json:"authenticated"`
 	GoogleLoginEnabled   bool              `json:"googleLoginEnabled,omitempty"`
@@ -70,7 +75,7 @@ type AppStore interface {
 		title *string,
 		completed *bool,
 	) (Todo, error)
-	DeleteTodo(ctx context.Context, actorEmail string, id string) error
+	DeleteTodo(ctx context.Context, actorEmail string, id string) (DeletedTodo, error)
 	ProvisionUser(ctx context.Context, email string) (ProvisionedUser, error)
 }
 
