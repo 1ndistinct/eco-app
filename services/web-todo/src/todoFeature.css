@@ -59,6 +59,20 @@ body {
   background: rgba(255, 255, 255, 0.74);
 }
 
+.todo-copy {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.todo-meta {
+  min-width: 0;
+}
+
+.todo-created-at {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 .todo-row-editor {
   background: rgba(243, 247, 251, 0.86);
 }

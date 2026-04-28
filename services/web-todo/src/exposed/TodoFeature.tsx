@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import DoneRoundedIcon from "@mui/icons-material/DoneRounded";
@@ -21,6 +21,12 @@ const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
   timeStyle: "short",
 });
+
+type TodoSections = {
+  items: Todo[];
+  todoItems: Todo[];
+  doneItems: Todo[];
+};
 
 function parseCreatedAt(createdAt?: string) {
   if (!createdAt) {
@@ -57,6 +63,32 @@ function formatCreatedAt(createdAt?: string) {
   return `Created ${createdAtFormatter.format(parsed)}`;
 }
 
+function emptyTodoSections(): TodoSections {
+  return {
+    items: [],
+    todoItems: [],
+    doneItems: [],
+  };
+}
+
+function normalizeTodoSections(data: Partial<TodoListResponse>): TodoSections {
+  const fallbackItems = Array.isArray(data.items) ? data.items : [];
+  const todoItems = Array.isArray(data.todoItems)
+    ? data.todoItems
+    : fallbackItems.filter((todo) => !todo.completed);
+  const doneItems = Array.isArray(data.doneItems)
+    ? data.doneItems
+    : fallbackItems.filter((todo) => todo.completed);
+  const orderedTodoItems = [...todoItems].sort(compareTodosByCreatedAt);
+  const orderedDoneItems = [...doneItems].sort(compareTodosByCreatedAt);
+
+  return {
+    items: [...orderedTodoItems, ...orderedDoneItems],
+    todoItems: orderedTodoItems,
+    doneItems: orderedDoneItems,
+  };
+}
+
 async function fetchTodosForWorkspace(workspaceId: string) {
   const response = await fetch(`${TODO_ENDPOINT}?workspace=${encodeURIComponent(workspaceId)}`);
   if (!response.ok) {
@@ -64,7 +96,7 @@ async function fetchTodosForWorkspace(workspaceId: string) {
   }
 
   const data = (await response.json()) as Partial<TodoListResponse>;
-  return Array.isArray(data.items) ? data.items : [];
+  return normalizeTodoSections(data);
 }
 
 export default function TodoFeature({
@@ -72,7 +104,7 @@ export default function TodoFeature({
   workspaceName,
   currentUserEmail,
 }: TodoFeatureProps) {
-  const [todos, setTodos] = useState<Todo[]>([]);
+  const [todoSections, setTodoSections] = useState<TodoSections>(emptyTodoSections);
   const [todoError, setTodoError] = useState<string | null>(null);
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
   const [draftTodoTitle, setDraftTodoTitle] = useState("");
@@ -83,11 +115,11 @@ export default function TodoFeature({
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingTodoTitle, setEditingTodoTitle] = useState("");
 
-  const remainingCount = useMemo(() => todos.filter((todo) => !todo.completed).length, [todos]);
-  const completedCount = todos.length - remainingCount;
-  const sortedTodos = useMemo(() => [...todos].sort(compareTodosByCreatedAt), [todos]);
-  const openTodos = useMemo(() => sortedTodos.filter((todo) => !todo.completed), [sortedTodos]);
-  const completedTodos = useMemo(() => sortedTodos.filter((todo) => todo.completed), [sortedTodos]);
+  const todos = todoSections.items;
+  const openTodos = todoSections.todoItems;
+  const completedTodos = todoSections.doneItems;
+  const remainingCount = openTodos.length;
+  const completedCount = completedTodos.length;
 
   useEffect(() => {
     let isActive = true;
@@ -108,14 +140,14 @@ export default function TodoFeature({
           return;
         }
 
-        setTodos(items);
+        setTodoSections(items);
       } catch (error) {
         if (!isActive) {
           return;
         }
 
         setTodoError(error instanceof Error ? error.message : "Unable to load todos.");
-        setTodos([]);
+        setTodoSections(emptyTodoSections());
       } finally {
         if (isActive) {
           setIsWorkspaceLoading(false);
@@ -147,7 +179,7 @@ export default function TodoFeature({
           }
 
           setTodoError(null);
-          setTodos(items);
+          setTodoSections(items);
         } catch (error) {
           if (!isActive) {
             return;
@@ -190,7 +222,11 @@ export default function TodoFeature({
       }
 
       const createdTodo = (await response.json()) as Todo;
-      setTodos((current) => [...current, createdTodo]);
+      setTodoSections((current) =>
+        normalizeTodoSections({
+          items: [...current.items, createdTodo],
+        }),
+      );
       setDraftTodoTitle("");
       setIsAddingTodoInline(false);
     } catch (error) {
@@ -219,8 +255,10 @@ export default function TodoFeature({
       }
 
       const updatedTodo = (await response.json()) as Todo;
-      setTodos((current) =>
-        current.map((item) => (item.id === updatedTodo.id ? updatedTodo : item)),
+      setTodoSections((current) =>
+        normalizeTodoSections({
+          items: current.items.map((item) => (item.id === updatedTodo.id ? updatedTodo : item)),
+        }),
       );
       return updatedTodo;
     } catch (error) {
@@ -279,7 +317,11 @@ export default function TodoFeature({
         throw new Error(await readErrorMessage(response, "Unable to delete todo."));
       }
 
-      setTodos((current) => current.filter((item) => item.id !== todo.id));
+      setTodoSections((current) =>
+        normalizeTodoSections({
+          items: current.items.filter((item) => item.id !== todo.id),
+        }),
+      );
     } catch (error) {
       setTodoError(error instanceof Error ? error.message : "Unable to delete todo.");
     } finally {
@@ -472,22 +514,31 @@ export default function TodoFeature({
                               spacing={1.5}
                               sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}
                             >
-                              <Box sx={{ minWidth: 0 }}>
+                              <Box sx={{ minWidth: 0 }} className="todo-copy">
                                 <Typography variant="subtitle1">{todo.title}</Typography>
-                                <Typography color="text.secondary">
-                                  {[ownerLabel, createdAtLabel].filter(Boolean).join(" · ")}
-                                </Typography>
+                                <Stack spacing={0.25} className="todo-meta">
+                                  <Typography color="text.secondary">{ownerLabel}</Typography>
+                                  {createdAtLabel ? (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      className="todo-created-at"
+                                    >
+                                      {createdAtLabel}
+                                    </Typography>
+                                  ) : null}
+                                </Stack>
                               </Box>
 
                               <Stack direction="row" spacing={1} className="todo-actions">
                                 <Button
-                                  variant="text"
+                                  variant="outlined"
                                   color="inherit"
                                   disabled={isMutating}
                                   onClick={() => handleStartEditingTodo(todo)}
                                   startIcon={<EditRoundedIcon />}
                                 >
-                                  Edit
+                                  Edit title
                                 </Button>
                                 <Button
                                   variant="contained"
@@ -601,26 +652,36 @@ export default function TodoFeature({
                               spacing={1.5}
                               sx={{ justifyContent: "space-between", alignItems: { md: "center" } }}
                             >
-                              <Box sx={{ minWidth: 0 }}>
+                              <Box sx={{ minWidth: 0 }} className="todo-copy">
                                 <Typography variant="subtitle1" className="todo-title-done">
                                   {todo.title}
                                 </Typography>
-                                <Typography color="text.secondary">
-                                  {[ownerLabel, createdAtLabel, "Completed"]
-                                    .filter(Boolean)
-                                    .join(" · ")}
-                                </Typography>
+                                <Stack spacing={0.25} className="todo-meta">
+                                  <Typography color="text.secondary">{ownerLabel}</Typography>
+                                  {createdAtLabel ? (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      className="todo-created-at"
+                                    >
+                                      {createdAtLabel}
+                                    </Typography>
+                                  ) : null}
+                                  <Typography variant="caption" color="text.secondary">
+                                    Completed
+                                  </Typography>
+                                </Stack>
                               </Box>
 
                               <Stack direction="row" spacing={1} className="todo-actions">
                                 <Button
-                                  variant="text"
+                                  variant="outlined"
                                   color="inherit"
                                   disabled={isMutating}
                                   onClick={() => handleStartEditingTodo(todo)}
                                   startIcon={<EditRoundedIcon />}
                                 >
-                                  Edit
+                                  Edit title
                                 </Button>
                                 <Button
                                   variant="outlined"

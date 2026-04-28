@@ -48,6 +48,8 @@ type errorResponse struct {
 
 type todoListResponse struct {
 	Items       []Todo `json:"items"`
+	TodoItems   []Todo `json:"todoItems"`
+	DoneItems   []Todo `json:"doneItems"`
 	WorkspaceID string `json:"workspaceId"`
 }
 
@@ -477,8 +479,14 @@ func (h *handler) handleTodos(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
 			return
 		}
+		todoItems, doneItems := splitTodosByCompletion(items)
+		groupedItems := make([]Todo, 0, len(items))
+		groupedItems = append(groupedItems, todoItems...)
+		groupedItems = append(groupedItems, doneItems...)
 		writeJSON(w, http.StatusOK, todoListResponse{
-			Items:       items,
+			Items:       groupedItems,
+			TodoItems:   todoItems,
+			DoneItems:   doneItems,
 			WorkspaceID: workspaceID,
 		})
 	case http.MethodPost:
@@ -919,6 +927,22 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func splitTodosByCompletion(items []Todo) ([]Todo, []Todo) {
+	todoItems := make([]Todo, 0, len(items))
+	doneItems := make([]Todo, 0, len(items))
+
+	for _, item := range items {
+		if item.Completed {
+			doneItems = append(doneItems, item)
+			continue
+		}
+
+		todoItems = append(todoItems, item)
+	}
+
+	return todoItems, doneItems
 }
 
 func writeSSEEvent(w http.ResponseWriter, event TodoEvent) error {

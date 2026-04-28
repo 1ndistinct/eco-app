@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import TodoFeature from "./TodoFeature";
@@ -24,10 +24,22 @@ class FakeEventSource {
   }
 }
 
-function workspaceItemsResponse(items: object[], workspaceId = "workspace-1") {
+function workspaceItemsResponse({
+  items,
+  todoItems,
+  doneItems,
+  workspaceId = "workspace-1",
+}: {
+  items: object[];
+  todoItems?: object[];
+  doneItems?: object[];
+  workspaceId?: string;
+}) {
   return new Response(
     JSON.stringify({
       items,
+      todoItems,
+      doneItems,
       workspaceId,
     }),
     {
@@ -55,33 +67,37 @@ describe("TodoFeature", () => {
   it("refetches todos when the stream receives an event", async () => {
     fetchMock
       .mockResolvedValueOnce(
-        workspaceItemsResponse([
-          {
-            id: "1",
-            title: "Ship auth flow",
-            completed: false,
-            ownerEmail: "owner@example.com",
-            workspaceId: "workspace-1",
-          },
-        ]),
+        workspaceItemsResponse({
+          items: [
+            {
+              id: "1",
+              title: "Ship auth flow",
+              completed: false,
+              ownerEmail: "owner@example.com",
+              workspaceId: "workspace-1",
+            },
+          ],
+        }),
       )
       .mockResolvedValueOnce(
-        workspaceItemsResponse([
-          {
-            id: "1",
-            title: "Ship auth flow",
-            completed: false,
-            ownerEmail: "owner@example.com",
-            workspaceId: "workspace-1",
-          },
-          {
-            id: "2",
-            title: "Review realtime updates",
-            completed: false,
-            ownerEmail: "owner@example.com",
-            workspaceId: "workspace-1",
-          },
-        ]),
+        workspaceItemsResponse({
+          items: [
+            {
+              id: "1",
+              title: "Ship auth flow",
+              completed: false,
+              ownerEmail: "owner@example.com",
+              workspaceId: "workspace-1",
+            },
+            {
+              id: "2",
+              title: "Review realtime updates",
+              completed: false,
+              ownerEmail: "owner@example.com",
+              workspaceId: "workspace-1",
+            },
+          ],
+        }),
       );
 
     const view = render(
@@ -107,5 +123,89 @@ describe("TodoFeature", () => {
 
     view.unmount();
     expect(FakeEventSource.instances[0]?.closed).toBe(true);
+  });
+
+  it("renders server-provided todo and done sections with edit actions", async () => {
+    fetchMock.mockResolvedValueOnce(
+      workspaceItemsResponse({
+        items: [
+          {
+            id: "2",
+            title: "Newer open task",
+            completed: false,
+            ownerEmail: "owner@example.com",
+            workspaceId: "workspace-1",
+            createdAt: "2026-04-28T10:05:00Z",
+          },
+          {
+            id: "1",
+            title: "Older open task",
+            completed: false,
+            ownerEmail: "owner@example.com",
+            workspaceId: "workspace-1",
+            createdAt: "2026-04-28T10:00:00Z",
+          },
+          {
+            id: "3",
+            title: "Done task",
+            completed: true,
+            ownerEmail: "owner@example.com",
+            workspaceId: "workspace-1",
+            createdAt: "2026-04-28T10:10:00Z",
+          },
+        ],
+        todoItems: [
+          {
+            id: "1",
+            title: "Older open task",
+            completed: false,
+            ownerEmail: "owner@example.com",
+            workspaceId: "workspace-1",
+            createdAt: "2026-04-28T10:00:00Z",
+          },
+          {
+            id: "2",
+            title: "Newer open task",
+            completed: false,
+            ownerEmail: "owner@example.com",
+            workspaceId: "workspace-1",
+            createdAt: "2026-04-28T10:05:00Z",
+          },
+        ],
+        doneItems: [
+          {
+            id: "3",
+            title: "Done task",
+            completed: true,
+            ownerEmail: "owner@example.com",
+            workspaceId: "workspace-1",
+            createdAt: "2026-04-28T10:10:00Z",
+          },
+        ],
+      }),
+    );
+
+    render(
+      <TodoFeature
+        workspaceId="workspace-1"
+        workspaceName="Personal"
+        currentUserEmail="owner@example.com"
+      />,
+    );
+
+    expect(await screen.findByText("Todo")).toBeTruthy();
+    expect(screen.getByText("Done")).toBeTruthy();
+    expect(screen.getByText("Older open task")).toBeTruthy();
+    expect(screen.getByText("Newer open task")).toBeTruthy();
+    expect(screen.getByText("Done task")).toBeTruthy();
+    expect(screen.getAllByText(/created /i).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /edit title/i }).length).toBeGreaterThan(0);
+
+    const todoListItems = within(screen.getByRole("list", { name: /todo items/i })).getAllByRole(
+      "listitem",
+    );
+    expect(todoListItems).toHaveLength(2);
+    expect(within(todoListItems[0]!).getByText("Older open task")).toBeTruthy();
+    expect(within(todoListItems[1]!).getByText("Newer open task")).toBeTruthy();
   });
 });

@@ -277,6 +277,70 @@ func TestAuthenticatedUserCreatesTodoInOwnWorkspace(t *testing.T) {
 	}
 }
 
+func TestTodoListResponseSeparatesTodoAndDoneItems(t *testing.T) {
+	store := newMemoryStore()
+	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+
+	handler := NewHandler(store)
+	loginRec := login(t, handler, "owner@example.com", "owner-password-123")
+	cookie := requireSessionCookie(t, loginRec)
+	workspace := requireFirstWorkspace(t, loginRec)
+
+	for _, title := range []string{"First task", "Second task", "Done task"} {
+		createReq := httptest.NewRequest(http.MethodPost, "/api/todos", strings.NewReader(`{"title":"`+title+`"}`))
+		createReq.Header.Set("Content-Type", "application/json")
+		createReq.AddCookie(cookie)
+		createRec := httptest.NewRecorder()
+		handler.ServeHTTP(createRec, createReq)
+
+		if createRec.Code != http.StatusCreated {
+			t.Fatalf("unexpected create status for %q: %d body=%s", title, createRec.Code, createRec.Body.String())
+		}
+	}
+
+	completeReq := httptest.NewRequest(http.MethodPatch, "/api/todos/3", strings.NewReader(`{"completed":true}`))
+	completeReq.Header.Set("Content-Type", "application/json")
+	completeReq.AddCookie(cookie)
+	completeRec := httptest.NewRecorder()
+	handler.ServeHTTP(completeRec, completeReq)
+
+	if completeRec.Code != http.StatusOK {
+		t.Fatalf("unexpected complete status: %d body=%s", completeRec.Code, completeRec.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/todos?workspace="+url.QueryEscape(workspace.ID), nil)
+	listReq.AddCookie(cookie)
+	listRec := httptest.NewRecorder()
+	handler.ServeHTTP(listRec, listReq)
+
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("unexpected list status: %d body=%s", listRec.Code, listRec.Body.String())
+	}
+
+	var listResp todoListResponse
+	if err := json.Unmarshal(listRec.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+
+	if got := len(listResp.TodoItems); got != 2 {
+		t.Fatalf("expected 2 todo items, got %+v", listResp)
+	}
+	if got := len(listResp.DoneItems); got != 1 {
+		t.Fatalf("expected 1 done item, got %+v", listResp)
+	}
+	if listResp.TodoItems[0].Title != "First task" || listResp.TodoItems[1].Title != "Second task" {
+		t.Fatalf("expected todo items ordered by creation, got %+v", listResp.TodoItems)
+	}
+	if listResp.DoneItems[0].Title != "Done task" {
+		t.Fatalf("expected done item in done section, got %+v", listResp.DoneItems)
+	}
+	if len(listResp.Items) != 3 || listResp.Items[0].Completed || listResp.Items[1].Completed || !listResp.Items[2].Completed {
+		t.Fatalf("expected combined items to list todos before done items, got %+v", listResp.Items)
+	}
+}
+
 func TestTodoStreamReceivesMutationEvents(t *testing.T) {
 	store := newMemoryStore()
 	if _, err := store.addUser("owner@example.com", "owner-password-123", false); err != nil {

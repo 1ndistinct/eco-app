@@ -492,7 +492,9 @@ describe("App", () => {
     if (!createdTodo) {
       throw new Error("created todo row not found");
     }
-    fireEvent.click(within(createdTodo).getByRole("button", { name: /^edit$/i, hidden: true }));
+    fireEvent.click(
+      within(createdTodo).getByRole("button", { name: /^edit title$/i, hidden: true }),
+    );
     fireEvent.change(within(createdTodo).getByLabelText(/todo title/i), {
       target: { value: "Write invite emails" },
     });

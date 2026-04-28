@@ -130,7 +130,7 @@ Todos are scoped to a named workspace. Each todo keeps both:
 - `workspaceId`: the workspace it belongs to
 - `ownerEmail`: the user who created it
 
-### `GET /api/todos?workspace=1`
+### `GET /api/todos?workspace=550e8400-e29b-41d4-a716-446655440000`
 - response: `200 application/json`
 ```json
 {
@@ -141,16 +141,48 @@ Todos are scoped to a named workspace. Each todo keeps both:
       "completed": false,
       "createdAt": "2026-04-28T10:30:00Z",
       "ownerEmail": "owner@example.com",
-      "workspaceId": "1"
+      "workspaceId": "550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "id": "2",
+      "title": "Done task",
+      "completed": true,
+      "createdAt": "2026-04-28T10:35:00Z",
+      "ownerEmail": "owner@example.com",
+      "workspaceId": "550e8400-e29b-41d4-a716-446655440000"
     }
   ],
-  "workspaceId": "1"
+  "todoItems": [
+    {
+      "id": "1",
+      "title": "Write backend first",
+      "completed": false,
+      "createdAt": "2026-04-28T10:30:00Z",
+      "ownerEmail": "owner@example.com",
+      "workspaceId": "550e8400-e29b-41d4-a716-446655440000"
+    }
+  ],
+  "doneItems": [
+    {
+      "id": "2",
+      "title": "Done task",
+      "completed": true,
+      "createdAt": "2026-04-28T10:35:00Z",
+      "ownerEmail": "owner@example.com",
+      "workspaceId": "550e8400-e29b-41d4-a716-446655440000"
+    }
+  ],
+  "workspaceId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 - requirements:
   - authenticated session required
   - password reset must already be completed
   - caller must own or have access to the requested workspace
+- behavior:
+  - open todos are ordered by `createdAt`
+  - completed todos are returned separately in `doneItems`
+  - `items` preserves the combined order of `todoItems` followed by `doneItems`
 
 ### `GET /api/todos/stream?workspace=1`
 - response: `200 text/event-stream`
