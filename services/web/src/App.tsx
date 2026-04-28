@@ -325,7 +325,7 @@ export default function App() {
     setWorkspaceManageError(null);
   }
 
-  function handleOpenCreateWorkspace(event: MouseEvent<HTMLElement>) {
+  function handleOpenCreateWorkspace(anchorEl: HTMLElement) {
     setCollaboratorMenuAnchorEl(null);
     setShareError(null);
     setShareSuccess(null);
@@ -333,7 +333,7 @@ export default function App() {
     setWorkspaceManageError(null);
     setWorkspaceSuccess(null);
     resetCreateWorkspaceForm();
-    setCreateWorkspaceAnchorEl(event.currentTarget);
+    setCreateWorkspaceAnchorEl(anchorEl);
   }
 
   function handleCloseCreateWorkspace() {

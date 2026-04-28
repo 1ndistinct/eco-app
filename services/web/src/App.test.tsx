@@ -788,7 +788,7 @@ describe("App", () => {
     expect(screen.getByRole("combobox")).toHaveTextContent("Personal · owner@example.com");
   });
 
-  it("shows a mobile workspace menu with workspace and app navigation", async () => {
+  it("shows a mobile workspace menu without workspace management controls", async () => {
     setMatchMedia(true);
 
     fetchMock
@@ -807,9 +807,9 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: /workspace menu/i })).toBeInTheDocument();
     expect(document.body.querySelector(".workspace-mobile-drawer")).not.toBeNull();
-    expect(screen.getByText("Workspaces")).toBeInTheDocument();
     expect(screen.getAllByText("Personal").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /create workspace/i })).toBeInTheDocument();
+    expect(screen.queryByText("Workspaces")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /create workspace/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open settings/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^todos$/i }));
@@ -817,5 +817,64 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.queryByRole("heading", { name: /workspace menu/i })).not.toBeInTheDocument();
     });
+  });
+
+  it("shows a mobile workspace selector popover with switching and create actions", async () => {
+    setMatchMedia(true);
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url === "/api/auth/session") {
+        return new Response(
+          JSON.stringify(
+            authenticatedSessionWithWorkspaces([
+              {
+                id: "workspace-1",
+                name: "Personal",
+                description: "Default workspace",
+                ownerEmail: "owner@example.com",
+                role: "owner",
+              },
+              {
+                id: "workspace-2",
+                name: "Launch Queue",
+                description: "Track rollout work.",
+                ownerEmail: "owner@example.com",
+                role: "owner",
+              },
+            ]),
+          ),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (url === "/api/todos?workspace=workspace-1") {
+        return workspaceItemsResponse([], "workspace-1");
+      }
+
+      if (url === "/api/todos?workspace=workspace-2") {
+        return workspaceItemsResponse([], "workspace-2");
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /open workspace selector/i }));
+
+    expect(await screen.findByText("Workspaces")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /create workspace/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /launch queue/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Workspaces")).not.toBeInTheDocument();
+    });
+    expect(window.location.pathname).toBe("/todo/workspaces/workspace-2");
+    expect(screen.getByText("Launch Queue")).toBeInTheDocument();
   });
 });

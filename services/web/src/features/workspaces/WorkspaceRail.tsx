@@ -44,7 +44,7 @@ type WorkspaceRailProps = {
   isWorkspaceSettingsOpen: boolean;
   isSidebarExpanded: boolean;
   onWorkspaceChange: (workspaceID: string) => void;
-  onOpenCreateWorkspace: (event: MouseEvent<HTMLElement>) => void;
+  onOpenCreateWorkspace: (anchorEl: HTMLElement) => void;
   onOpenCollaborators: (event: MouseEvent<HTMLElement>) => void;
   onCloseCollaborators: () => void;
   onShareEmailChange: (value: string) => void;
@@ -170,6 +170,10 @@ export function WorkspaceRail({
     ? "Collapse workspace selector"
     : "Open workspace selector";
 
+  function handleOpenCreateWorkspace(event: MouseEvent<HTMLElement>) {
+    onOpenCreateWorkspace(event.currentTarget);
+  }
+
   return (
     <Paper
       square
@@ -253,7 +257,7 @@ export function WorkspaceRail({
             "Create workspace",
             "Create workspace",
             <AddRoundedIcon />,
-            onOpenCreateWorkspace,
+            handleOpenCreateWorkspace,
           )}
 
           {renderUtilityButton(

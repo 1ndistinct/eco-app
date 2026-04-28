@@ -1,4 +1,4 @@
-import { FormEvent, MouseEvent } from "react";
+import { FormEvent, MouseEvent, useState } from "react";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import ChecklistRoundedIcon from "@mui/icons-material/ChecklistRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
@@ -6,6 +6,7 @@ import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
+import WorkspacesRoundedIcon from "@mui/icons-material/WorkspacesRounded";
 import {
   Badge,
   Box,
@@ -19,7 +20,7 @@ import {
 } from "@mui/material";
 
 import { WorkspaceAccess } from "../../app/types";
-import { AppButton, AppIconButton } from "../../components/ui";
+import { AppButton, AppIconButton, PopoverSurface } from "../../components/ui";
 import { CollaboratorsPopover } from "./CollaboratorsPopover";
 import { formatWorkspaceLabel } from "./workspaceLabels";
 
@@ -41,7 +42,7 @@ type WorkspaceHeaderProps = {
   isSidebarExpanded: boolean;
   onWorkspaceChange: (workspaceID: string) => void;
   onCloseSidebar: () => void;
-  onOpenCreateWorkspace: (event: MouseEvent<HTMLElement>) => void;
+  onOpenCreateWorkspace: (anchorEl: HTMLElement) => void;
   onOpenCollaborators: (event: MouseEvent<HTMLElement>) => void;
   onCloseCollaborators: () => void;
   onShareEmailChange: (value: string) => void;
@@ -82,13 +83,38 @@ export function WorkspaceHeader({
 }: WorkspaceHeaderProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [workspaceMenuAnchorEl, setWorkspaceMenuAnchorEl] = useState<HTMLElement | null>(null);
 
   if (!isMobile) {
     return null;
   }
 
   function handleWorkspaceSelection(workspaceId: string) {
+    setWorkspaceMenuAnchorEl(null);
     onWorkspaceChange(workspaceId);
+    onCloseSidebar();
+  }
+
+  function handleOpenCreateWorkspaceFromMenu(event: MouseEvent<HTMLElement>) {
+    setWorkspaceMenuAnchorEl(null);
+    onOpenCreateWorkspace(workspaceMenuAnchorEl ?? event.currentTarget);
+  }
+
+  function handleOpenWorkspaceMenu(event: MouseEvent<HTMLElement>) {
+    setWorkspaceMenuAnchorEl(event.currentTarget);
+  }
+
+  function handleCloseWorkspaceMenu() {
+    setWorkspaceMenuAnchorEl(null);
+  }
+
+  function handleOpenSidebar() {
+    setWorkspaceMenuAnchorEl(null);
+    onToggleSidebar();
+  }
+
+  function handleCloseMobileSidebar() {
+    setWorkspaceMenuAnchorEl(null);
     onCloseSidebar();
   }
 
@@ -131,7 +157,7 @@ export function WorkspaceHeader({
                 color="inherit"
                 className={`header-action-button header-sidebar-toggle${isSidebarExpanded ? " header-action-button-active" : ""}`}
                 aria-label={sidebarLabel}
-                onClick={isSidebarExpanded ? onCloseSidebar : onToggleSidebar}
+                onClick={isSidebarExpanded ? handleCloseMobileSidebar : handleOpenSidebar}
               >
                 {isSidebarExpanded ? <CloseRoundedIcon /> : <MenuRoundedIcon />}
               </AppIconButton>
@@ -153,6 +179,20 @@ export function WorkspaceHeader({
             className="header-utility-controls"
             sx={{ alignItems: "center" }}
           >
+            <Tooltip title={currentWorkspaceLabel}>
+              <span>
+                <AppIconButton
+                  color="inherit"
+                  className={`header-action-button${workspaceMenuAnchorEl ? " header-action-button-active" : ""}`}
+                  aria-label="Open workspace selector"
+                  disabled={accessibleWorkspaces.length === 0}
+                  onClick={handleOpenWorkspaceMenu}
+                >
+                  <WorkspacesRoundedIcon />
+                </AppIconButton>
+              </span>
+            </Tooltip>
+
             <Tooltip
               title={`${collaboratorCount} collaborator${collaboratorCount === 1 ? "" : "s"}`}
             >
@@ -181,7 +221,7 @@ export function WorkspaceHeader({
       <Drawer
         anchor="left"
         open={isSidebarExpanded}
-        onClose={onCloseSidebar}
+        onClose={handleCloseMobileSidebar}
         ModalProps={{ keepMounted: true }}
         slotProps={{ paper: { className: "workspace-mobile-drawer" } }}
       >
@@ -198,7 +238,7 @@ export function WorkspaceHeader({
               color="inherit"
               aria-label="Close workspace menu"
               className="sidebar-toggle-button"
-              onClick={onCloseSidebar}
+              onClick={handleCloseMobileSidebar}
             >
               <CloseRoundedIcon />
             </AppIconButton>
@@ -225,43 +265,6 @@ export function WorkspaceHeader({
 
           <Stack spacing={0.75} className="workspace-mobile-section">
             <Typography variant="overline" className="workspace-mobile-section-label">
-              Workspaces
-            </Typography>
-            <Stack spacing={0.75} className="workspace-mobile-workspace-list">
-              {accessibleWorkspaces.map((workspace) => {
-                const isActive = workspace.id === selectedWorkspace;
-
-                return (
-                  <AppButton
-                    key={workspace.id}
-                    fullWidth
-                    variant="outlined"
-                    color="inherit"
-                    className={`workspace-mobile-workspace-button app-selector-item${isActive ? " app-selector-item-active" : ""}`}
-                    onClick={() => handleWorkspaceSelection(workspace.id)}
-                    sx={{
-                      justifyContent: "flex-start",
-                      px: 1.25,
-                      py: 1.125,
-                      textTransform: "none",
-                    }}
-                  >
-                    <Stack spacing={0.25} className="workspace-mobile-workspace-copy">
-                      <Typography variant="body2" className="workspace-mobile-workspace-name">
-                        {workspace.name}
-                      </Typography>
-                      <Typography variant="caption" className="workspace-mobile-workspace-meta">
-                        {workspace.description || workspace.ownerEmail}
-                      </Typography>
-                    </Stack>
-                  </AppButton>
-                );
-              })}
-            </Stack>
-          </Stack>
-
-          <Stack spacing={0.75} className="workspace-mobile-section">
-            <Typography variant="overline" className="workspace-mobile-section-label">
               Apps
             </Typography>
             <Stack spacing={0.75} className="app-selector">
@@ -271,7 +274,7 @@ export function WorkspaceHeader({
                 color="inherit"
                 startIcon={<ChecklistRoundedIcon />}
                 className="workspace-mobile-workspace-button app-selector-item app-selector-item-active"
-                onClick={onCloseSidebar}
+                onClick={handleCloseMobileSidebar}
                 sx={{ justifyContent: "flex-start", px: 1.25, py: 1.125, textTransform: "none" }}
               >
                 Todos
@@ -284,18 +287,6 @@ export function WorkspaceHeader({
               Actions
             </Typography>
             <Stack spacing={0.75} className="app-selector">
-              <AppButton
-                fullWidth
-                variant="outlined"
-                color="inherit"
-                startIcon={<AddRoundedIcon />}
-                className="workspace-mobile-workspace-button app-selector-item"
-                onClick={onOpenCreateWorkspace}
-                sx={{ justifyContent: "flex-start", px: 1.25, py: 1.125, textTransform: "none" }}
-              >
-                Create workspace
-              </AppButton>
-
               <AppButton
                 fullWidth
                 variant="outlined"
@@ -339,6 +330,65 @@ export function WorkspaceHeader({
           </Box>
         </Box>
       </Drawer>
+
+      <PopoverSurface
+        open={Boolean(workspaceMenuAnchorEl)}
+        anchorEl={workspaceMenuAnchorEl}
+        onClose={handleCloseWorkspaceMenu}
+      >
+        <Stack spacing={1.5}>
+          <Box>
+            <Typography variant="h6">Workspaces</Typography>
+            <Typography color="text.secondary">
+              {accessibleWorkspaces.length} available
+            </Typography>
+          </Box>
+
+          <Stack spacing={0.75} className="workspace-mobile-workspace-list">
+            {accessibleWorkspaces.map((workspace) => {
+              const isActive = workspace.id === selectedWorkspace;
+
+              return (
+                <AppButton
+                  key={workspace.id}
+                  fullWidth
+                  variant="outlined"
+                  color="inherit"
+                  className={`workspace-mobile-workspace-button app-selector-item${isActive ? " app-selector-item-active" : ""}`}
+                  onClick={() => handleWorkspaceSelection(workspace.id)}
+                  sx={{
+                    justifyContent: "flex-start",
+                    px: 1.25,
+                    py: 1.125,
+                    textTransform: "none",
+                  }}
+                >
+                  <Stack spacing={0.25} className="workspace-mobile-workspace-copy">
+                    <Typography variant="body2" className="workspace-mobile-workspace-name">
+                      {workspace.name}
+                    </Typography>
+                    <Typography variant="caption" className="workspace-mobile-workspace-meta">
+                      {workspace.description || workspace.ownerEmail}
+                    </Typography>
+                  </Stack>
+                </AppButton>
+              );
+            })}
+          </Stack>
+
+          <AppButton
+            fullWidth
+            variant="outlined"
+            color="inherit"
+            startIcon={<AddRoundedIcon />}
+            className="workspace-mobile-workspace-button app-selector-item"
+            onClick={handleOpenCreateWorkspaceFromMenu}
+            sx={{ justifyContent: "flex-start", px: 1.25, py: 1.125, textTransform: "none" }}
+          >
+            Create workspace
+          </AppButton>
+        </Stack>
+      </PopoverSurface>
 
       <CollaboratorsPopover
         anchorEl={collaboratorMenuAnchorEl}
