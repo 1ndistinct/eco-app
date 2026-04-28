@@ -132,6 +132,7 @@ export function WorkspaceSettingsView({
                     }
                     sx={(theme) => ({
                       alignSelf: "flex-start",
+                      borderRadius: "var(--control-radius)",
                       backgroundColor: theme.palette.error.main,
                       borderColor: theme.palette.error.main,
                       color: theme.palette.error.contrastText,
