@@ -788,7 +788,7 @@ describe("App", () => {
     expect(screen.getByRole("combobox")).toHaveTextContent("Personal · owner@example.com");
   });
 
-  it("shows a mobile workspace menu without workspace management controls", async () => {
+  it("shows a mobile drawer without workspace management controls", async () => {
     setMatchMedia(true);
 
     fetchMock
@@ -805,9 +805,8 @@ describe("App", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /open workspace menu/i }));
 
-    expect(await screen.findByRole("heading", { name: /workspace menu/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^menu$/i })).toBeInTheDocument();
     expect(document.body.querySelector(".workspace-mobile-drawer")).not.toBeNull();
-    expect(screen.getAllByText("Personal").length).toBeGreaterThan(0);
     expect(screen.queryByText("Workspaces")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /create workspace/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open settings/i })).toBeInTheDocument();
@@ -815,7 +814,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /^todos$/i }));
 
     await waitFor(() => {
-      expect(screen.queryByRole("heading", { name: /workspace menu/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: /^menu$/i })).not.toBeInTheDocument();
     });
   });
 

@@ -7,17 +7,7 @@ import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import WorkspacesRoundedIcon from "@mui/icons-material/WorkspacesRounded";
-import {
-  Badge,
-  Box,
-  Drawer,
-  Paper,
-  Stack,
-  Tooltip,
-  Typography,
-  useMediaQuery,
-  useTheme,
-} from "@mui/material";
+import { Badge, Box, Drawer, Paper, Stack, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
 
 import { WorkspaceAccess } from "../../app/types";
 import { AppButton, AppIconButton, PopoverSurface } from "../../components/ui";
@@ -231,7 +221,7 @@ export function WorkspaceHeader({
               <Typography variant="overline" className="workspace-mobile-topbar-kicker">
                 Eco
               </Typography>
-              <Typography variant="h5">Workspace menu</Typography>
+              <Typography variant="h5">Menu</Typography>
             </Stack>
 
             <AppIconButton
@@ -243,25 +233,6 @@ export function WorkspaceHeader({
               <CloseRoundedIcon />
             </AppIconButton>
           </Box>
-
-          <Paper elevation={0} className="workspace-mobile-current-card">
-            <Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
-              <Box className="workspace-sidebar-logo-tile">
-                <Box component="img" src="/logo.svg" alt="Eco" className="workspace-sidebar-logo" />
-              </Box>
-
-              <Stack spacing={0.25} className="workspace-mobile-current-copy">
-                <Typography variant="subtitle1" className="workspace-mobile-topbar-title">
-                  {currentWorkspaceLabel}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {currentUserEmail
-                    ? `Signed in as ${currentUserEmail}`
-                    : "Pick a workspace to continue."}
-                </Typography>
-              </Stack>
-            </Stack>
-          </Paper>
 
           <Stack spacing={0.75} className="workspace-mobile-section">
             <Typography variant="overline" className="workspace-mobile-section-label">
