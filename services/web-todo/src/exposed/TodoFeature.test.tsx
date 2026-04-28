@@ -122,7 +122,7 @@ describe("TodoFeature", () => {
     expect(FakeEventSource.instances[0]?.closed).toBe(true);
   });
 
-  it("renders server-provided todo and done sections with edit actions", async () => {
+  it("renders server-provided todo and done sections with icon actions", async () => {
     fetchMock.mockResolvedValueOnce(
       workspaceItemsResponse({
         todoItems: [
@@ -170,7 +170,12 @@ describe("TodoFeature", () => {
     expect(screen.getByText("Newer open task")).toBeTruthy();
     expect(screen.getByText("Done task")).toBeTruthy();
     expect(screen.getAllByText(/created /i).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /edit title/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /edit older open task/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /mark older open task done/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /delete older open task/i })).toBeTruthy();
+    expect(screen.queryByText("Edit title")).toBeNull();
+    expect(screen.queryByText("Mark done")).toBeNull();
+    expect(screen.queryByText("Delete")).toBeNull();
 
     const todoListItems = within(screen.getByRole("list", { name: /todo items/i })).getAllByRole(
       "listitem",

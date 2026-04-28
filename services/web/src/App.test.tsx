@@ -452,7 +452,7 @@ describe("App", () => {
       throw new Error("created todo row not found");
     }
     fireEvent.click(
-      within(createdTodo).getByRole("button", { name: /^edit title$/i, hidden: true }),
+      within(createdTodo).getByRole("button", { name: /^edit write invite flow$/i, hidden: true }),
     );
     fireEvent.change(within(createdTodo).getByLabelText(/todo title/i), {
       target: { value: "Write invite emails" },
@@ -472,7 +472,12 @@ describe("App", () => {
     if (!existingTodo) {
       throw new Error("existing todo row not found");
     }
-    fireEvent.click(within(existingTodo).getByRole("button", { name: /mark done/i, hidden: true }));
+    fireEvent.click(
+      within(existingTodo).getByRole("button", {
+        name: /^mark existing task done$/i,
+        hidden: true,
+      }),
+    );
     await waitFor(() => {
       expect(screen.getByRole("list", { name: /done items/i, hidden: true })).toBeInTheDocument();
     });

@@ -3,11 +3,13 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import DoneRoundedIcon from "@mui/icons-material/DoneRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
+import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
+  IconButton,
   Paper,
   Stack,
   TextField,
@@ -539,41 +541,43 @@ export default function TodoFeature({
                               </Box>
 
                               <Stack direction="row" spacing={1} className="todo-actions">
-                                <Button
-                                  variant="outlined"
-                                  color="inherit"
+                                <IconButton
+                                  size="small"
+                                  color="default"
                                   disabled={isMutating}
                                   onClick={() => handleStartEditingTodo(todo)}
-                                  startIcon={<EditRoundedIcon />}
+                                  aria-label={`Edit ${todo.title}`}
                                 >
-                                  Edit title
-                                </Button>
-                                <Button
-                                  variant="contained"
+                                  <EditRoundedIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
                                   color="success"
                                   disabled={isMutating}
                                   onClick={() => handleToggleTodo(todo)}
+                                  aria-label={isUpdating ? `Saving ${todo.title}` : `Mark ${todo.title} done`}
                                 >
-                                  {isUpdating ? "Saving..." : "Mark done"}
-                                </Button>
-                                <Button
-                                  variant="text"
+                                  {isUpdating ? (
+                                    <CircularProgress size={18} color="inherit" />
+                                  ) : (
+                                    <DoneRoundedIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                                <IconButton
+                                  size="small"
                                   color="error"
                                   disabled={isMutating}
                                   onClick={() => handleDeleteTodo(todo)}
                                   aria-label={
                                     isDeleting ? `Deleting ${todo.title}` : `Delete ${todo.title}`
-                                  }
-                                  startIcon={
-                                    isDeleting ? (
-                                      <CircularProgress size={16} color="inherit" />
-                                    ) : (
-                                      <DeleteOutlineRoundedIcon />
-                                    )
-                                  }
+                                  } 
                                 >
-                                  {isDeleting ? "Deleting..." : "Delete"}
-                                </Button>
+                                  {isDeleting ? (
+                                    <CircularProgress size={18} color="inherit" />
+                                  ) : (
+                                    <DeleteOutlineRoundedIcon fontSize="small" />
+                                  )}
+                                </IconButton>
                               </Stack>
                             </Stack>
                           )}
@@ -682,41 +686,43 @@ export default function TodoFeature({
                               </Box>
 
                               <Stack direction="row" spacing={1} className="todo-actions">
-                                <Button
-                                  variant="outlined"
-                                  color="inherit"
+                                <IconButton
+                                  size="small"
+                                  color="default"
                                   disabled={isMutating}
                                   onClick={() => handleStartEditingTodo(todo)}
-                                  startIcon={<EditRoundedIcon />}
+                                  aria-label={`Edit ${todo.title}`}
                                 >
-                                  Edit title
-                                </Button>
-                                <Button
-                                  variant="outlined"
-                                  color="inherit"
+                                  <EditRoundedIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  color="default"
                                   disabled={isMutating}
                                   onClick={() => handleToggleTodo(todo)}
+                                  aria-label={isUpdating ? `Saving ${todo.title}` : `Reopen ${todo.title}`}
                                 >
-                                  {isUpdating ? "Saving..." : "Reopen"}
-                                </Button>
-                                <Button
-                                  variant="text"
+                                  {isUpdating ? (
+                                    <CircularProgress size={18} color="inherit" />
+                                  ) : (
+                                    <ReplayRoundedIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                                <IconButton
+                                  size="small"
                                   color="error"
                                   disabled={isMutating}
                                   onClick={() => handleDeleteTodo(todo)}
                                   aria-label={
                                     isDeleting ? `Deleting ${todo.title}` : `Delete ${todo.title}`
-                                  }
-                                  startIcon={
-                                    isDeleting ? (
-                                      <CircularProgress size={16} color="inherit" />
-                                    ) : (
-                                      <DeleteOutlineRoundedIcon />
-                                    )
-                                  }
+                                  } 
                                 >
-                                  {isDeleting ? "Deleting..." : "Delete"}
-                                </Button>
+                                  {isDeleting ? (
+                                    <CircularProgress size={18} color="inherit" />
+                                  ) : (
+                                    <DeleteOutlineRoundedIcon fontSize="small" />
+                                  )}
+                                </IconButton>
                               </Stack>
                             </Stack>
                           )}
