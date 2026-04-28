@@ -9,9 +9,8 @@ export type Todo = {
 };
 
 export type TodoListResponse = {
-  items: Todo[];
-  todoItems?: Todo[];
-  doneItems?: Todo[];
+  todoItems: Todo[];
+  doneItems: Todo[];
   workspaceId: string;
 };
 

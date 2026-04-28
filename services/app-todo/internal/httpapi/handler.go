@@ -47,7 +47,6 @@ type errorResponse struct {
 }
 
 type todoListResponse struct {
-	Items       []Todo `json:"items"`
 	TodoItems   []Todo `json:"todoItems"`
 	DoneItems   []Todo `json:"doneItems"`
 	WorkspaceID string `json:"workspaceId"`
@@ -480,11 +479,7 @@ func (h *handler) handleTodos(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		todoItems, doneItems := splitTodosByCompletion(items)
-		groupedItems := make([]Todo, 0, len(items))
-		groupedItems = append(groupedItems, todoItems...)
-		groupedItems = append(groupedItems, doneItems...)
 		writeJSON(w, http.StatusOK, todoListResponse{
-			Items:       groupedItems,
 			TodoItems:   todoItems,
 			DoneItems:   doneItems,
 			WorkspaceID: workspaceID,

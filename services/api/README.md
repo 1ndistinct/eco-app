@@ -134,24 +134,6 @@ Todos are scoped to a named workspace. Each todo keeps both:
 - response: `200 application/json`
 ```json
 {
-  "items": [
-    {
-      "id": "1",
-      "title": "Write backend first",
-      "completed": false,
-      "createdAt": "2026-04-28T10:30:00Z",
-      "ownerEmail": "owner@example.com",
-      "workspaceId": "550e8400-e29b-41d4-a716-446655440000"
-    },
-    {
-      "id": "2",
-      "title": "Done task",
-      "completed": true,
-      "createdAt": "2026-04-28T10:35:00Z",
-      "ownerEmail": "owner@example.com",
-      "workspaceId": "550e8400-e29b-41d4-a716-446655440000"
-    }
-  ],
   "todoItems": [
     {
       "id": "1",
@@ -182,7 +164,6 @@ Todos are scoped to a named workspace. Each todo keeps both:
 - behavior:
   - open todos are ordered by `createdAt`
   - completed todos are returned separately in `doneItems`
-  - `items` preserves the combined order of `todoItems` followed by `doneItems`
 
 ### `GET /api/todos/stream?workspace=1`
 - response: `200 text/event-stream`

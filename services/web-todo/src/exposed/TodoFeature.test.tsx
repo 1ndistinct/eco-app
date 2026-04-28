@@ -25,19 +25,16 @@ class FakeEventSource {
 }
 
 function workspaceItemsResponse({
-  items,
   todoItems,
   doneItems,
   workspaceId = "workspace-1",
 }: {
-  items: object[];
   todoItems?: object[];
   doneItems?: object[];
   workspaceId?: string;
 }) {
   return new Response(
     JSON.stringify({
-      items,
       todoItems,
       doneItems,
       workspaceId,
@@ -68,7 +65,7 @@ describe("TodoFeature", () => {
     fetchMock
       .mockResolvedValueOnce(
         workspaceItemsResponse({
-          items: [
+          todoItems: [
             {
               id: "1",
               title: "Ship auth flow",
@@ -81,7 +78,7 @@ describe("TodoFeature", () => {
       )
       .mockResolvedValueOnce(
         workspaceItemsResponse({
-          items: [
+          todoItems: [
             {
               id: "1",
               title: "Ship auth flow",
@@ -128,32 +125,6 @@ describe("TodoFeature", () => {
   it("renders server-provided todo and done sections with edit actions", async () => {
     fetchMock.mockResolvedValueOnce(
       workspaceItemsResponse({
-        items: [
-          {
-            id: "2",
-            title: "Newer open task",
-            completed: false,
-            ownerEmail: "owner@example.com",
-            workspaceId: "workspace-1",
-            createdAt: "2026-04-28T10:05:00Z",
-          },
-          {
-            id: "1",
-            title: "Older open task",
-            completed: false,
-            ownerEmail: "owner@example.com",
-            workspaceId: "workspace-1",
-            createdAt: "2026-04-28T10:00:00Z",
-          },
-          {
-            id: "3",
-            title: "Done task",
-            completed: true,
-            ownerEmail: "owner@example.com",
-            workspaceId: "workspace-1",
-            createdAt: "2026-04-28T10:10:00Z",
-          },
-        ],
         todoItems: [
           {
             id: "1",

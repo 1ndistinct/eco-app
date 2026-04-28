@@ -213,7 +213,7 @@ func TestProvisionedUserMustResetPasswordBeforeUsingTodos(t *testing.T) {
 	if err := json.Unmarshal(listRec.Body.Bytes(), &listResp); err != nil {
 		t.Fatalf("decode list response after reset: %v", err)
 	}
-	if listResp.WorkspaceID == "" || len(listResp.Items) != 0 {
+	if listResp.WorkspaceID == "" || len(listResp.TodoItems) != 0 || len(listResp.DoneItems) != 0 {
 		t.Fatalf("unexpected list response after reset: %+v", listResp)
 	}
 }
@@ -335,9 +335,6 @@ func TestTodoListResponseSeparatesTodoAndDoneItems(t *testing.T) {
 	}
 	if listResp.DoneItems[0].Title != "Done task" {
 		t.Fatalf("expected done item in done section, got %+v", listResp.DoneItems)
-	}
-	if len(listResp.Items) != 3 || listResp.Items[0].Completed || listResp.Items[1].Completed || !listResp.Items[2].Completed {
-		t.Fatalf("expected combined items to list todos before done items, got %+v", listResp.Items)
 	}
 }
 
@@ -508,11 +505,11 @@ func TestSharedWorkspaceCollaboratorCanViewEditUpdateAndDeleteOwnerTodos(t *test
 	if err := json.Unmarshal(listRec.Body.Bytes(), &listResp); err != nil {
 		t.Fatalf("decode collaborator list body: %v", err)
 	}
-	if len(listResp.Items) != 1 || listResp.Items[0].OwnerEmail != "owner@example.com" {
+	if len(listResp.TodoItems) != 1 || listResp.TodoItems[0].OwnerEmail != "owner@example.com" {
 		t.Fatalf("expected owner-owned todo, got %+v", listResp)
 	}
-	if listResp.Items[0].CreatedAt.IsZero() {
-		t.Fatalf("expected collaborator list item to include createdAt: %+v", listResp.Items[0])
+	if listResp.TodoItems[0].CreatedAt.IsZero() {
+		t.Fatalf("expected collaborator list item to include createdAt: %+v", listResp.TodoItems[0])
 	}
 
 	editReq := httptest.NewRequest(http.MethodPatch, "/api/todos/1", strings.NewReader(`{"title":"Shared queue updated"}`))
@@ -576,7 +573,7 @@ func TestSharedWorkspaceCollaboratorCanViewEditUpdateAndDeleteOwnerTodos(t *test
 	if err := json.Unmarshal(listAfterDeleteRec.Body.Bytes(), &listAfterDeleteResp); err != nil {
 		t.Fatalf("decode owner list after delete: %v", err)
 	}
-	if listAfterDeleteResp.WorkspaceID != ownerWorkspace.ID || len(listAfterDeleteResp.Items) != 0 {
+	if listAfterDeleteResp.WorkspaceID != ownerWorkspace.ID || len(listAfterDeleteResp.TodoItems) != 0 || len(listAfterDeleteResp.DoneItems) != 0 {
 		t.Fatalf("unexpected owner list body after delete: %+v", listAfterDeleteResp)
 	}
 }

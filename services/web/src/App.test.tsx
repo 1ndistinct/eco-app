@@ -33,10 +33,17 @@ function authenticatedSessionWithWorkspaces(workspaces: object[], passwordResetR
   };
 }
 
-function workspaceItemsResponse(items: object[] = [], workspaceId = "workspace-1") {
+function workspaceItemsResponse(
+  items: Array<Record<string, unknown>> = [],
+  workspaceId = "workspace-1",
+) {
+  const todoItems = items.filter((item) => item.completed !== true);
+  const doneItems = items.filter((item) => item.completed === true);
+
   return new Response(
     JSON.stringify({
-      items,
+      todoItems,
+      doneItems,
       workspaceId,
     }),
     {
@@ -131,23 +138,17 @@ describe("App", () => {
       }
 
       if (url === "/api/todos?workspace=workspace-1") {
-        return new Response(
-          JSON.stringify({
-            items: [
-              {
-                id: "1",
-                title: "Ship auth flow",
-                completed: false,
-                ownerEmail: "owner@example.com",
-                workspaceId: "workspace-1",
-              },
-            ],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
+        return workspaceItemsResponse(
+          [
+            {
+              id: "1",
+              title: "Ship auth flow",
+              completed: false,
+              ownerEmail: "owner@example.com",
+              workspaceId: "workspace-1",
+            },
+          ],
+          "workspace-1",
         );
       }
 
@@ -251,28 +252,10 @@ describe("App", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        workspaceItemsResponse([], "workspace-1"),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        workspaceItemsResponse([], "workspace-1"),
       );
 
     render(<App />);
@@ -327,16 +310,7 @@ describe("App", () => {
       }
 
       if (url === "/api/todos?workspace=workspace-1") {
-        return new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
+        return workspaceItemsResponse([], "workspace-1");
       }
 
       if (url === "/api/shares?workspace=workspace-1") {
@@ -379,37 +353,22 @@ describe("App", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [
-              {
-                id: "1",
-                title: "Existing task",
-                completed: false,
-                ownerEmail: "owner@example.com",
-                workspaceId: "workspace-1",
-                createdAt: "2026-04-24T09:00:00.000Z",
-              },
-            ],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
+        workspaceItemsResponse(
+          [
+            {
+              id: "1",
+              title: "Existing task",
+              completed: false,
+              ownerEmail: "owner@example.com",
+              workspaceId: "workspace-1",
+              createdAt: "2026-04-24T09:00:00.000Z",
+            },
+          ],
+          "workspace-1",
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        workspaceItemsResponse([], "workspace-1"),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -588,16 +547,7 @@ describe("App", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        workspaceItemsResponse([], "workspace-1"),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -653,28 +603,10 @@ describe("App", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        workspaceItemsResponse([], "workspace-1"),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        workspaceItemsResponse([], "workspace-1"),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -692,53 +624,17 @@ describe("App", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-2",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        workspaceItemsResponse([], "workspace-2"),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-2",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        workspaceItemsResponse([], "workspace-2"),
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        workspaceItemsResponse([], "workspace-1"),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [],
-            workspaceId: "workspace-1",
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        workspaceItemsResponse([], "workspace-1"),
       );
 
     render(<App />);

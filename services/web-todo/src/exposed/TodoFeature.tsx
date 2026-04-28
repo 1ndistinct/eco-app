@@ -23,7 +23,6 @@ const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
 });
 
 type TodoSections = {
-  items: Todo[];
   todoItems: Todo[];
   doneItems: Todo[];
 };
@@ -65,28 +64,37 @@ function formatCreatedAt(createdAt?: string) {
 
 function emptyTodoSections(): TodoSections {
   return {
-    items: [],
     todoItems: [],
     doneItems: [],
   };
 }
 
 function normalizeTodoSections(data: Partial<TodoListResponse>): TodoSections {
-  const fallbackItems = Array.isArray(data.items) ? data.items : [];
-  const todoItems = Array.isArray(data.todoItems)
-    ? data.todoItems
-    : fallbackItems.filter((todo) => !todo.completed);
-  const doneItems = Array.isArray(data.doneItems)
-    ? data.doneItems
-    : fallbackItems.filter((todo) => todo.completed);
+  const todoItems = Array.isArray(data.todoItems) ? data.todoItems : [];
+  const doneItems = Array.isArray(data.doneItems) ? data.doneItems : [];
   const orderedTodoItems = [...todoItems].sort(compareTodosByCreatedAt);
   const orderedDoneItems = [...doneItems].sort(compareTodosByCreatedAt);
 
   return {
-    items: [...orderedTodoItems, ...orderedDoneItems],
     todoItems: orderedTodoItems,
     doneItems: orderedDoneItems,
   };
+}
+
+function splitTodoSections(items: Todo[]): TodoSections {
+  const todoItems: Todo[] = [];
+  const doneItems: Todo[] = [];
+
+  for (const item of items) {
+    if (item.completed) {
+      doneItems.push(item);
+      continue;
+    }
+
+    todoItems.push(item);
+  }
+
+  return normalizeTodoSections({ todoItems, doneItems });
 }
 
 async function fetchTodosForWorkspace(workspaceId: string) {
@@ -115,9 +123,9 @@ export default function TodoFeature({
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingTodoTitle, setEditingTodoTitle] = useState("");
 
-  const todos = todoSections.items;
   const openTodos = todoSections.todoItems;
   const completedTodos = todoSections.doneItems;
+  const totalTodos = openTodos.length + completedTodos.length;
   const remainingCount = openTodos.length;
   const completedCount = completedTodos.length;
 
@@ -223,9 +231,7 @@ export default function TodoFeature({
 
       const createdTodo = (await response.json()) as Todo;
       setTodoSections((current) =>
-        normalizeTodoSections({
-          items: [...current.items, createdTodo],
-        }),
+        splitTodoSections([...current.todoItems, ...current.doneItems, createdTodo]),
       );
       setDraftTodoTitle("");
       setIsAddingTodoInline(false);
@@ -256,9 +262,11 @@ export default function TodoFeature({
 
       const updatedTodo = (await response.json()) as Todo;
       setTodoSections((current) =>
-        normalizeTodoSections({
-          items: current.items.map((item) => (item.id === updatedTodo.id ? updatedTodo : item)),
-        }),
+        splitTodoSections(
+          [...current.todoItems, ...current.doneItems].map((item) =>
+            item.id === updatedTodo.id ? updatedTodo : item,
+          ),
+        ),
       );
       return updatedTodo;
     } catch (error) {
@@ -318,9 +326,9 @@ export default function TodoFeature({
       }
 
       setTodoSections((current) =>
-        normalizeTodoSections({
-          items: current.items.filter((item) => item.id !== todo.id),
-        }),
+        splitTodoSections(
+          [...current.todoItems, ...current.doneItems].filter((item) => item.id !== todo.id),
+        ),
       );
     } catch (error) {
       setTodoError(error instanceof Error ? error.message : "Unable to delete todo.");
@@ -424,7 +432,7 @@ export default function TodoFeature({
           </Stack>
         ) : null}
 
-        {!isWorkspaceLoading && todos.length === 0 && !isAddingTodoInline && !todoError ? (
+        {!isWorkspaceLoading && totalTodos === 0 && !isAddingTodoInline && !todoError ? (
           <Paper elevation={0} className="empty-state">
             <Stack spacing={0.75}>
               <Typography variant="h6">No todos</Typography>
@@ -435,7 +443,7 @@ export default function TodoFeature({
           </Paper>
         ) : null}
 
-        {!isWorkspaceLoading && todos.length > 0 ? (
+        {!isWorkspaceLoading && totalTodos > 0 ? (
           <Box className="todo-list-scrollbox">
             <Stack spacing={2.5} className="todo-sections">
               {openTodos.length > 0 ? (
