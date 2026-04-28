@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +27,6 @@ type memoryWorkspace struct {
 
 type memoryStore struct {
 	mu         sync.Mutex
-	nextTodoID int
 	users      map[string]memoryUser
 	workspaces map[string]memoryWorkspace
 	sessions   map[string]string
@@ -38,7 +36,6 @@ type memoryStore struct {
 
 func newMemoryStore() *memoryStore {
 	return &memoryStore{
-		nextTodoID: 1,
 		users:      map[string]memoryUser{},
 		workspaces: map[string]memoryWorkspace{},
 		sessions:   map[string]string{},
@@ -422,14 +419,13 @@ func (s *memoryStore) CreateTodo(_ context.Context, actorEmail string, workspace
 	}
 
 	todo := Todo{
-		ID:          strconv.Itoa(s.nextTodoID),
+		ID:          uuid.NewString(),
 		Title:       title,
 		Completed:   false,
 		OwnerEmail:  normalizedActorEmail,
 		WorkspaceID: workspace.id,
 		CreatedAt:   time.Now().UTC(),
 	}
-	s.nextTodoID++
 	s.todos = append(s.todos, todo)
 
 	return todo, nil

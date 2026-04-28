@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strconv"
 	"strings"
 	"time"
 
@@ -416,7 +415,7 @@ func (s *PostgresStore) ListTodos(ctx context.Context, actorEmail string, worksp
 		).
 		From("todos").
 		Where(workspaceIDEquals("workspace_id", parsedWorkspaceID)).
-		OrderBy("created_at ASC", "id ASC").
+		OrderBy("created_at ASC", "legacy_id ASC NULLS LAST", "id ASC").
 		ToSql()
 	if err != nil {
 		return nil, err
@@ -479,13 +478,13 @@ func (s *PostgresStore) UpdateTodo(
 	title *string,
 	completed *bool,
 ) (Todo, error) {
-	numericID, err := strconv.ParseInt(id, 10, 64)
+	parsedTodoID, err := parseTodoID(id)
 	if err != nil {
 		return Todo{}, ErrTodoNotFound
 	}
 
 	var workspaceID sql.NullString
-	if err := s.db.GetContext(ctx, &workspaceID, `SELECT workspace_id::text FROM todos WHERE id = $1`, numericID); errors.Is(err, sql.ErrNoRows) {
+	if err := s.db.GetContext(ctx, &workspaceID, `SELECT workspace_id::text FROM todos WHERE id = $1::uuid`, parsedTodoID); errors.Is(err, sql.ErrNoRows) {
 		return Todo{}, ErrTodoNotFound
 	} else if err != nil {
 		return Todo{}, err
@@ -507,7 +506,7 @@ func (s *PostgresStore) UpdateTodo(
 	updateBuilder = updateBuilder.Set("edited_at", sq.Expr("NOW()"))
 
 	query, args, err := updateBuilder.
-		Where(sq.Eq{"id": numericID}).
+		Where(todoIDEquals("id", parsedTodoID)).
 		Suffix(
 			"RETURNING id::text AS id, title, completed, owner_email, workspace_id::text AS workspace_id, created_at, edited_at",
 		).
@@ -527,13 +526,13 @@ func (s *PostgresStore) UpdateTodo(
 }
 
 func (s *PostgresStore) DeleteTodo(ctx context.Context, actorEmail string, id string) (DeletedTodo, error) {
-	numericID, err := strconv.ParseInt(id, 10, 64)
+	parsedTodoID, err := parseTodoID(id)
 	if err != nil {
 		return DeletedTodo{}, ErrTodoNotFound
 	}
 
 	var workspaceID sql.NullString
-	if err := s.db.GetContext(ctx, &workspaceID, `SELECT workspace_id::text FROM todos WHERE id = $1`, numericID); errors.Is(err, sql.ErrNoRows) {
+	if err := s.db.GetContext(ctx, &workspaceID, `SELECT workspace_id::text FROM todos WHERE id = $1::uuid`, parsedTodoID); errors.Is(err, sql.ErrNoRows) {
 		return DeletedTodo{}, ErrTodoNotFound
 	} else if err != nil {
 		return DeletedTodo{}, err
@@ -547,7 +546,7 @@ func (s *PostgresStore) DeleteTodo(ctx context.Context, actorEmail string, id st
 
 	query, args, err := s.builder.
 		Delete("todos").
-		Where(sq.Eq{"id": numericID}).
+		Where(todoIDEquals("id", parsedTodoID)).
 		ToSql()
 	if err != nil {
 		return DeletedTodo{}, err
@@ -723,6 +722,19 @@ func parseWorkspaceID(workspaceID string) (string, error) {
 	}
 
 	return parsedWorkspaceID.String(), nil
+}
+
+func parseTodoID(todoID string) (string, error) {
+	parsedTodoID, err := uuid.Parse(strings.TrimSpace(todoID))
+	if err != nil {
+		return "", err
+	}
+
+	return parsedTodoID.String(), nil
+}
+
+func todoIDEquals(column string, todoID string) sq.Sqlizer {
+	return sq.Expr(column+" = ?::uuid", todoID)
 }
 
 func workspaceIDEquals(column string, workspaceID string) sq.Sqlizer {

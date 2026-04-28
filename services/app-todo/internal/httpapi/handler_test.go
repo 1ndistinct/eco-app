@@ -288,6 +288,7 @@ func TestTodoListResponseSeparatesTodoAndDoneItems(t *testing.T) {
 	cookie := requireSessionCookie(t, loginRec)
 	workspace := requireFirstWorkspace(t, loginRec)
 
+	createdTodos := make([]Todo, 0, 3)
 	for _, title := range []string{"First task", "Second task", "Done task"} {
 		createReq := httptest.NewRequest(http.MethodPost, "/api/todos", strings.NewReader(`{"title":"`+title+`"}`))
 		createReq.Header.Set("Content-Type", "application/json")
@@ -298,9 +299,10 @@ func TestTodoListResponseSeparatesTodoAndDoneItems(t *testing.T) {
 		if createRec.Code != http.StatusCreated {
 			t.Fatalf("unexpected create status for %q: %d body=%s", title, createRec.Code, createRec.Body.String())
 		}
+		createdTodos = append(createdTodos, requireTodo(t, createRec))
 	}
 
-	completeReq := httptest.NewRequest(http.MethodPatch, "/api/todos/3", strings.NewReader(`{"completed":true}`))
+	completeReq := httptest.NewRequest(http.MethodPatch, "/api/todos/"+createdTodos[2].ID, strings.NewReader(`{"completed":true}`))
 	completeReq.Header.Set("Content-Type", "application/json")
 	completeReq.AddCookie(cookie)
 	completeRec := httptest.NewRecorder()
@@ -482,6 +484,7 @@ func TestSharedWorkspaceCollaboratorCanViewEditUpdateAndDeleteOwnerTodos(t *test
 	if createRec.Code != http.StatusCreated {
 		t.Fatalf("unexpected owner create status: %d body=%s", createRec.Code, createRec.Body.String())
 	}
+	createdTodo := requireTodo(t, createRec)
 
 	shareReq := httptest.NewRequest(http.MethodPost, "/api/shares", strings.NewReader(`{"workspaceId":"`+ownerWorkspace.ID+`","email":"collab@example.com"}`))
 	shareReq.Header.Set("Content-Type", "application/json")
@@ -512,7 +515,7 @@ func TestSharedWorkspaceCollaboratorCanViewEditUpdateAndDeleteOwnerTodos(t *test
 		t.Fatalf("expected collaborator list item to include createdAt: %+v", listResp.TodoItems[0])
 	}
 
-	editReq := httptest.NewRequest(http.MethodPatch, "/api/todos/1", strings.NewReader(`{"title":"Shared queue updated"}`))
+	editReq := httptest.NewRequest(http.MethodPatch, "/api/todos/"+createdTodo.ID, strings.NewReader(`{"title":"Shared queue updated"}`))
 	editReq.Header.Set("Content-Type", "application/json")
 	editReq.AddCookie(collabCookie)
 	editRec := httptest.NewRecorder()
@@ -532,7 +535,7 @@ func TestSharedWorkspaceCollaboratorCanViewEditUpdateAndDeleteOwnerTodos(t *test
 		t.Fatalf("expected collaborator edit to include editedAt: %+v", editedTodo)
 	}
 
-	updateReq := httptest.NewRequest(http.MethodPatch, "/api/todos/1", strings.NewReader(`{"completed":true}`))
+	updateReq := httptest.NewRequest(http.MethodPatch, "/api/todos/"+createdTodo.ID, strings.NewReader(`{"completed":true}`))
 	updateReq.Header.Set("Content-Type", "application/json")
 	updateReq.AddCookie(collabCookie)
 	updateRec := httptest.NewRecorder()
@@ -552,7 +555,7 @@ func TestSharedWorkspaceCollaboratorCanViewEditUpdateAndDeleteOwnerTodos(t *test
 		t.Fatalf("expected collaborator update to include editedAt: %+v", updatedTodo)
 	}
 
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/todos/1", nil)
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/todos/"+createdTodo.ID, nil)
 	deleteReq.AddCookie(collabCookie)
 	deleteRec := httptest.NewRecorder()
 	handler.ServeHTTP(deleteRec, deleteReq)
@@ -715,6 +718,17 @@ func login(t *testing.T, handler http.Handler, email string, password string) *h
 	handler.ServeHTTP(loginRec, loginReq)
 
 	return loginRec
+}
+
+func requireTodo(t *testing.T, rec *httptest.ResponseRecorder) Todo {
+	t.Helper()
+
+	var todo Todo
+	if err := json.Unmarshal(rec.Body.Bytes(), &todo); err != nil {
+		t.Fatalf("decode todo: %v", err)
+	}
+
+	return todo
 }
 
 func requireSessionCookie(t *testing.T, rec *httptest.ResponseRecorder) *http.Cookie {

@@ -136,7 +136,7 @@ Todos are scoped to a named workspace. Each todo keeps both:
 {
   "todoItems": [
     {
-      "id": "1",
+      "id": "d4f3f4d1-cfed-4b4b-a0ae-6443dc1f7a67",
       "title": "Write backend first",
       "completed": false,
       "createdAt": "2026-04-28T10:30:00Z",
@@ -146,7 +146,7 @@ Todos are scoped to a named workspace. Each todo keeps both:
   ],
   "doneItems": [
     {
-      "id": "2",
+      "id": "4cf887ef-e9f1-4c96-9131-5c81b6f72837",
       "title": "Done task",
       "completed": true,
       "createdAt": "2026-04-28T10:35:00Z",
@@ -179,17 +179,17 @@ Todos are scoped to a named workspace. Each todo keeps both:
 ### `POST /api/todos`
 - request: `application/json`
 ```json
-{"title":"Write backend first","workspaceId":"1"}
+{"title":"Write backend first","workspaceId":"550e8400-e29b-41d4-a716-446655440000"}
 ```
 - response: `201 application/json`
 ```json
 {
-  "id": "1",
+  "id": "d4f3f4d1-cfed-4b4b-a0ae-6443dc1f7a67",
   "title": "Write backend first",
   "completed": false,
   "createdAt": "2026-04-28T10:30:00Z",
   "ownerEmail": "owner@example.com",
-  "workspaceId": "1"
+  "workspaceId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 - validation:
@@ -204,13 +204,13 @@ Todos are scoped to a named workspace. Each todo keeps both:
 - response: `200 application/json`
 ```json
 {
-  "id": "1",
+  "id": "d4f3f4d1-cfed-4b4b-a0ae-6443dc1f7a67",
   "title": "Write backend first today",
   "completed": true,
   "createdAt": "2026-04-28T10:30:00Z",
   "editedAt": "2026-04-28T11:15:00Z",
   "ownerEmail": "owner@example.com",
-  "workspaceId": "1"
+  "workspaceId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 - validation:
