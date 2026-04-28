@@ -1,6 +1,8 @@
 -- +goose Up
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS workspaces (
-  id BIGSERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_email TEXT NOT NULL REFERENCES users(email) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
@@ -18,13 +20,12 @@ WHERE NOT EXISTS (
   WHERE workspaces.owner_email = users.email
 );
 
-ALTER TABLE workspace_memberships ADD COLUMN IF NOT EXISTS workspace_id BIGINT;
+ALTER TABLE workspace_memberships ADD COLUMN IF NOT EXISTS workspace_id UUID;
 
 -- +goose StatementBegin
 WITH default_workspaces AS (
-  SELECT owner_email, MIN(id) AS workspace_id
+  SELECT owner_email, id AS workspace_id
   FROM workspaces
-  GROUP BY owner_email
 )
 UPDATE workspace_memberships
 SET workspace_id = default_workspaces.workspace_id

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const defaultWorkspaceName = "Personal"
@@ -25,24 +27,22 @@ type memoryWorkspace struct {
 }
 
 type memoryStore struct {
-	mu              sync.Mutex
-	nextTodoID      int
-	nextWorkspaceID int
-	users           map[string]memoryUser
-	workspaces      map[string]memoryWorkspace
-	sessions        map[string]string
-	shares          map[string]map[string]bool
-	todos           []Todo
+	mu         sync.Mutex
+	nextTodoID int
+	users      map[string]memoryUser
+	workspaces map[string]memoryWorkspace
+	sessions   map[string]string
+	shares     map[string]map[string]bool
+	todos      []Todo
 }
 
 func newMemoryStore() *memoryStore {
 	return &memoryStore{
-		nextTodoID:      1,
-		nextWorkspaceID: 1,
-		users:           map[string]memoryUser{},
-		workspaces:      map[string]memoryWorkspace{},
-		sessions:        map[string]string{},
-		shares:          map[string]map[string]bool{},
+		nextTodoID: 1,
+		users:      map[string]memoryUser{},
+		workspaces: map[string]memoryWorkspace{},
+		sessions:   map[string]string{},
+		shares:     map[string]map[string]bool{},
 	}
 }
 
@@ -510,12 +510,11 @@ func (s *memoryStore) ProvisionUser(_ context.Context, email string) (Provisione
 
 func (s *memoryStore) createWorkspaceLocked(ownerEmail string, name string, description string) memoryWorkspace {
 	workspace := memoryWorkspace{
-		id:          strconv.Itoa(s.nextWorkspaceID),
+		id:          uuid.NewString(),
 		ownerEmail:  ownerEmail,
 		name:        name,
 		description: description,
 	}
-	s.nextWorkspaceID++
 	s.workspaces[workspace.id] = workspace
 	return workspace
 }

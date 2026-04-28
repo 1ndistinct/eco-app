@@ -1,11 +1,10 @@
 -- +goose Up
-ALTER TABLE todos ADD COLUMN IF NOT EXISTS workspace_id BIGINT;
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS workspace_id UUID;
 
 -- +goose StatementBegin
 WITH default_workspaces AS (
-  SELECT owner_email, MIN(id) AS workspace_id
+  SELECT owner_email, id AS workspace_id
   FROM workspaces
-  GROUP BY owner_email
 )
 UPDATE todos
 SET workspace_id = default_workspaces.workspace_id

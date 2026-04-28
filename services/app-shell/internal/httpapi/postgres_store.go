@@ -9,6 +9,7 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -24,7 +25,7 @@ type userRow struct {
 }
 
 type workspaceRow struct {
-	ID          int64  `db:"id"`
+	ID          string `db:"id"`
 	OwnerEmail  string `db:"owner_email"`
 	Name        string `db:"name"`
 	Description string `db:"description"`
@@ -230,12 +231,12 @@ func (s *PostgresStore) CreateWorkspace(ctx context.Context, ownerEmail string, 
 }
 
 func (s *PostgresStore) DeleteWorkspace(ctx context.Context, actorEmail string, workspaceID string) error {
-	numericWorkspaceID, err := parseWorkspaceID(workspaceID)
+	parsedWorkspaceID, err := parseWorkspaceID(workspaceID)
 	if err != nil {
 		return ErrWorkspaceNotFound
 	}
 
-	workspace, err := s.workspaceByID(ctx, numericWorkspaceID)
+	workspace, err := s.workspaceByID(ctx, parsedWorkspaceID)
 	if errors.Is(err, ErrWorkspaceNotFound) {
 		return ErrWorkspaceNotFound
 	}
@@ -248,7 +249,7 @@ func (s *PostgresStore) DeleteWorkspace(ctx context.Context, actorEmail string, 
 
 	query, args, err := s.builder.
 		Delete("workspaces").
-		Where(sq.Eq{"id": numericWorkspaceID}).
+		Where(workspaceIDEquals("id", parsedWorkspaceID)).
 		ToSql()
 	if err != nil {
 		return err
@@ -271,18 +272,18 @@ func (s *PostgresStore) DeleteWorkspace(ctx context.Context, actorEmail string, 
 }
 
 func (s *PostgresStore) ListWorkspaceShares(ctx context.Context, actorEmail string, workspaceID string) ([]WorkspaceShare, error) {
-	numericWorkspaceID, err := parseWorkspaceID(workspaceID)
+	parsedWorkspaceID, err := parseWorkspaceID(workspaceID)
 	if err != nil {
 		return nil, ErrWorkspaceAccessDenied
 	}
-	if err := s.authorizeWorkspace(ctx, normalizeEmail(actorEmail), numericWorkspaceID); err != nil {
+	if err := s.authorizeWorkspace(ctx, normalizeEmail(actorEmail), parsedWorkspaceID); err != nil {
 		return nil, err
 	}
 
 	query, args, err := s.builder.
 		Select("workspace_id::text AS workspace_id", "user_email AS email").
 		From("workspace_memberships").
-		Where(sq.Eq{"workspace_id": numericWorkspaceID}).
+		Where(workspaceIDEquals("workspace_id", parsedWorkspaceID)).
 		OrderBy("user_email ASC").
 		ToSql()
 	if err != nil {
@@ -301,7 +302,7 @@ func (s *PostgresStore) ListWorkspaceShares(ctx context.Context, actorEmail stri
 }
 
 func (s *PostgresStore) CreateWorkspaceShare(ctx context.Context, actorEmail string, workspaceID string, shareWithEmail string) (WorkspaceShare, error) {
-	numericWorkspaceID, err := parseWorkspaceID(workspaceID)
+	parsedWorkspaceID, err := parseWorkspaceID(workspaceID)
 	if err != nil {
 		return WorkspaceShare{}, ErrWorkspaceAccessDenied
 	}
@@ -312,7 +313,7 @@ func (s *PostgresStore) CreateWorkspaceShare(ctx context.Context, actorEmail str
 		return WorkspaceShare{}, ErrShareTargetRequired
 	}
 
-	workspace, err := s.workspaceByID(ctx, numericWorkspaceID)
+	workspace, err := s.workspaceByID(ctx, parsedWorkspaceID)
 	if errors.Is(err, ErrWorkspaceNotFound) {
 		return WorkspaceShare{}, ErrWorkspaceAccessDenied
 	}
@@ -322,7 +323,7 @@ func (s *PostgresStore) CreateWorkspaceShare(ctx context.Context, actorEmail str
 	if normalizedShareWithEmail == workspace.OwnerEmail {
 		return WorkspaceShare{}, ErrCannotShareWithOwner
 	}
-	if err := s.authorizeWorkspace(ctx, normalizedActorEmail, numericWorkspaceID); err != nil {
+	if err := s.authorizeWorkspace(ctx, normalizedActorEmail, parsedWorkspaceID); err != nil {
 		return WorkspaceShare{}, err
 	}
 
@@ -337,7 +338,7 @@ func (s *PostgresStore) CreateWorkspaceShare(ctx context.Context, actorEmail str
 	query, args, err := s.builder.
 		Insert("workspace_memberships").
 		Columns("workspace_id", "user_email").
-		Values(numericWorkspaceID, normalizedShareWithEmail).
+		Values(workspaceIDValue(parsedWorkspaceID), normalizedShareWithEmail).
 		Suffix("ON CONFLICT (workspace_id, user_email) DO NOTHING").
 		ToSql()
 	if err != nil {
@@ -355,7 +356,7 @@ func (s *PostgresStore) CreateWorkspaceShare(ctx context.Context, actorEmail str
 }
 
 func (s *PostgresStore) DeleteWorkspaceShare(ctx context.Context, actorEmail string, workspaceID string, shareWithEmail string) error {
-	numericWorkspaceID, err := parseWorkspaceID(workspaceID)
+	parsedWorkspaceID, err := parseWorkspaceID(workspaceID)
 	if err != nil {
 		return ErrWorkspaceAccessDenied
 	}
@@ -366,14 +367,14 @@ func (s *PostgresStore) DeleteWorkspaceShare(ctx context.Context, actorEmail str
 		return ErrShareTargetRequired
 	}
 
-	workspace, err := s.workspaceByID(ctx, numericWorkspaceID)
+	workspace, err := s.workspaceByID(ctx, parsedWorkspaceID)
 	if errors.Is(err, ErrWorkspaceNotFound) {
 		return ErrWorkspaceAccessDenied
 	}
 	if err != nil {
 		return err
 	}
-	if err := s.authorizeWorkspace(ctx, normalizedActorEmail, numericWorkspaceID); err != nil {
+	if err := s.authorizeWorkspace(ctx, normalizedActorEmail, parsedWorkspaceID); err != nil {
 		return err
 	}
 	if normalizedShareWithEmail == workspace.OwnerEmail {
@@ -382,10 +383,8 @@ func (s *PostgresStore) DeleteWorkspaceShare(ctx context.Context, actorEmail str
 
 	query, args, err := s.builder.
 		Delete("workspace_memberships").
-		Where(sq.Eq{
-			"workspace_id": numericWorkspaceID,
-			"user_email":   normalizedShareWithEmail,
-		}).
+		Where(workspaceIDEquals("workspace_id", parsedWorkspaceID)).
+		Where(sq.Eq{"user_email": normalizedShareWithEmail}).
 		ToSql()
 	if err != nil {
 		return err
@@ -396,12 +395,12 @@ func (s *PostgresStore) DeleteWorkspaceShare(ctx context.Context, actorEmail str
 }
 
 func (s *PostgresStore) ListTodos(ctx context.Context, actorEmail string, workspaceID string) ([]Todo, error) {
-	numericWorkspaceID, err := parseWorkspaceID(workspaceID)
+	parsedWorkspaceID, err := parseWorkspaceID(workspaceID)
 	if err != nil {
 		return nil, ErrWorkspaceAccessDenied
 	}
 
-	if err := s.authorizeWorkspace(ctx, normalizeEmail(actorEmail), numericWorkspaceID); err != nil {
+	if err := s.authorizeWorkspace(ctx, normalizeEmail(actorEmail), parsedWorkspaceID); err != nil {
 		return nil, err
 	}
 
@@ -416,7 +415,7 @@ func (s *PostgresStore) ListTodos(ctx context.Context, actorEmail string, worksp
 			"edited_at",
 		).
 		From("todos").
-		Where(sq.Eq{"workspace_id": numericWorkspaceID}).
+		Where(workspaceIDEquals("workspace_id", parsedWorkspaceID)).
 		OrderBy("created_at ASC", "id ASC").
 		ToSql()
 	if err != nil {
@@ -435,17 +434,17 @@ func (s *PostgresStore) ListTodos(ctx context.Context, actorEmail string, worksp
 }
 
 func (s *PostgresStore) CreateTodo(ctx context.Context, actorEmail string, workspaceID string, title string) (Todo, error) {
-	numericWorkspaceID, err := parseWorkspaceID(workspaceID)
+	parsedWorkspaceID, err := parseWorkspaceID(workspaceID)
 	if err != nil {
 		return Todo{}, ErrWorkspaceAccessDenied
 	}
 
 	normalizedActorEmail := normalizeEmail(actorEmail)
-	if err := s.authorizeWorkspace(ctx, normalizedActorEmail, numericWorkspaceID); err != nil {
+	if err := s.authorizeWorkspace(ctx, normalizedActorEmail, parsedWorkspaceID); err != nil {
 		return Todo{}, err
 	}
 
-	workspace, err := s.workspaceByID(ctx, numericWorkspaceID)
+	workspace, err := s.workspaceByID(ctx, parsedWorkspaceID)
 	if errors.Is(err, ErrWorkspaceNotFound) {
 		return Todo{}, ErrWorkspaceAccessDenied
 	}
@@ -456,7 +455,7 @@ func (s *PostgresStore) CreateTodo(ctx context.Context, actorEmail string, works
 	query, args, err := s.builder.
 		Insert("todos").
 		Columns("workspace_id", "workspace_email", "owner_email", "title").
-		Values(numericWorkspaceID, workspace.OwnerEmail, normalizedActorEmail, title).
+		Values(workspaceIDValue(parsedWorkspaceID), workspace.OwnerEmail, normalizedActorEmail, title).
 		Suffix(
 			"RETURNING id::text AS id, title, completed, owner_email, workspace_id::text AS workspace_id, created_at, edited_at",
 		).
@@ -485,16 +484,16 @@ func (s *PostgresStore) UpdateTodo(
 		return Todo{}, ErrTodoNotFound
 	}
 
-	var workspaceID sql.NullInt64
-	if err := s.db.GetContext(ctx, &workspaceID, `SELECT workspace_id FROM todos WHERE id = $1`, numericID); errors.Is(err, sql.ErrNoRows) {
+	var workspaceID sql.NullString
+	if err := s.db.GetContext(ctx, &workspaceID, `SELECT workspace_id::text FROM todos WHERE id = $1`, numericID); errors.Is(err, sql.ErrNoRows) {
 		return Todo{}, ErrTodoNotFound
 	} else if err != nil {
 		return Todo{}, err
 	}
-	if !workspaceID.Valid {
+	if !workspaceID.Valid || strings.TrimSpace(workspaceID.String) == "" {
 		return Todo{}, ErrTodoNotFound
 	}
-	if err := s.authorizeWorkspace(ctx, normalizeEmail(actorEmail), workspaceID.Int64); err != nil {
+	if err := s.authorizeWorkspace(ctx, normalizeEmail(actorEmail), workspaceID.String); err != nil {
 		return Todo{}, err
 	}
 
@@ -533,16 +532,16 @@ func (s *PostgresStore) DeleteTodo(ctx context.Context, actorEmail string, id st
 		return ErrTodoNotFound
 	}
 
-	var workspaceID sql.NullInt64
-	if err := s.db.GetContext(ctx, &workspaceID, `SELECT workspace_id FROM todos WHERE id = $1`, numericID); errors.Is(err, sql.ErrNoRows) {
+	var workspaceID sql.NullString
+	if err := s.db.GetContext(ctx, &workspaceID, `SELECT workspace_id::text FROM todos WHERE id = $1`, numericID); errors.Is(err, sql.ErrNoRows) {
 		return ErrTodoNotFound
 	} else if err != nil {
 		return err
 	}
-	if !workspaceID.Valid {
+	if !workspaceID.Valid || strings.TrimSpace(workspaceID.String) == "" {
 		return ErrTodoNotFound
 	}
-	if err := s.authorizeWorkspace(ctx, normalizeEmail(actorEmail), workspaceID.Int64); err != nil {
+	if err := s.authorizeWorkspace(ctx, normalizeEmail(actorEmail), workspaceID.String); err != nil {
 		return err
 	}
 
@@ -630,13 +629,13 @@ func (s *PostgresStore) ProvisionUser(ctx context.Context, email string) (Provis
 	}, nil
 }
 
-func (s *PostgresStore) authorizeWorkspace(ctx context.Context, actorEmail string, workspaceID int64) error {
+func (s *PostgresStore) authorizeWorkspace(ctx context.Context, actorEmail string, workspaceID string) error {
 	var exists bool
 	if err := s.db.GetContext(ctx, &exists, `
 		SELECT EXISTS (
 			SELECT 1
 			FROM workspaces
-			WHERE workspaces.id = $1
+			WHERE workspaces.id = $1::uuid
 			  AND (
 				workspaces.owner_email = $2
 				OR EXISTS (
@@ -679,12 +678,12 @@ func (s *PostgresStore) userByEmail(ctx context.Context, email string) (userRow,
 	return user, nil
 }
 
-func (s *PostgresStore) workspaceByID(ctx context.Context, id int64) (workspaceRow, error) {
+func (s *PostgresStore) workspaceByID(ctx context.Context, id string) (workspaceRow, error) {
 	var workspace workspaceRow
 	if err := s.db.GetContext(ctx, &workspace, `
-		SELECT id, owner_email, name, description
+		SELECT id::text AS id, owner_email, name, description
 		FROM workspaces
-		WHERE id = $1
+		WHERE id = $1::uuid
 	`, id); errors.Is(err, sql.ErrNoRows) {
 		return workspaceRow{}, ErrWorkspaceNotFound
 	} else if err != nil {
@@ -714,6 +713,19 @@ func (s *PostgresStore) insertWorkspace(ctx context.Context, queryer sqlx.Querye
 	return workspace, nil
 }
 
-func parseWorkspaceID(workspaceID string) (int64, error) {
-	return strconv.ParseInt(strings.TrimSpace(workspaceID), 10, 64)
+func parseWorkspaceID(workspaceID string) (string, error) {
+	parsedWorkspaceID, err := uuid.Parse(strings.TrimSpace(workspaceID))
+	if err != nil {
+		return "", err
+	}
+
+	return parsedWorkspaceID.String(), nil
+}
+
+func workspaceIDEquals(column string, workspaceID string) sq.Sqlizer {
+	return sq.Expr(column+" = ?::uuid", workspaceID)
+}
+
+func workspaceIDValue(workspaceID string) sq.Sqlizer {
+	return sq.Expr("?::uuid", workspaceID)
 }
