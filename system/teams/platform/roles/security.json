@@ -7,7 +7,7 @@
       "description": "Run deploy or ci when security work changes deployable behavior.",
       "required": true,
       "when": [
-        {"type": "changed_file_matches", "match_any": ["deploy/**", "services/app/**", "services/web/nginx/**", "Taskfile.yml", "Tiltfile"]},
+        {"type": "changed_file_matches", "match_any": ["deploy/**", "services/app-shell/**", "services/app-todo/**", "services/web/nginx/**", "Taskfile.yml", "Tiltfile"]},
         {"type": "task_target_exists", "match_any": ["deploy", "ci"]},
         {"type": "task_target_prefix_exists", "match_any": ["probe:"]}
       ],
@@ -20,7 +20,7 @@
       "description": "Probe the deployed system after security-impacting changes.",
       "required": true,
       "when": [
-        {"type": "changed_file_matches", "match_any": ["deploy/**", "services/app/**", "services/web/nginx/**", "Taskfile.yml", "Tiltfile"]},
+        {"type": "changed_file_matches", "match_any": ["deploy/**", "services/app-shell/**", "services/app-todo/**", "services/web/nginx/**", "Taskfile.yml", "Tiltfile"]},
         {"type": "task_target_exists", "match_any": ["deploy", "ci"]},
         {"type": "task_target_prefix_exists", "match_any": ["probe:"]}
       ],
@@ -33,7 +33,7 @@
       "description": "Tear the deployed environment down after validation when cleanup targets exist.",
       "required": true,
       "when": [
-        {"type": "changed_file_matches", "match_any": ["deploy/**", "services/app/**", "services/web/nginx/**", "Taskfile.yml", "Tiltfile"]},
+        {"type": "changed_file_matches", "match_any": ["deploy/**", "services/app-shell/**", "services/app-todo/**", "services/web/nginx/**", "Taskfile.yml", "Tiltfile"]},
         {"type": "task_target_exists", "match_any": ["cleanup", "down"]}
       ],
       "receipts": [

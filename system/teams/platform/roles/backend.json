@@ -10,7 +10,7 @@
         {
           "name": "backend code changed",
           "type": "changed_file_matches",
-          "match_any": ["services/app/**"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**"]
         }
       ]
     },
@@ -21,14 +21,14 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["services/app/**"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**"]
         }
       ],
       "receipts": [
         {
           "name": "backend tests changed",
           "type": "changed_file_matches",
-          "match_any": ["services/app/**/*_test.go"]
+          "match_any": ["services/app-shell/**/*_test.go", "services/app-todo/**/*_test.go"]
         }
       ]
     },
@@ -39,7 +39,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["services/app/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]
         },
         {
           "type": "task_target_exists",
@@ -65,7 +65,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["services/app/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]
         },
         {
           "type": "task_target_exists",
@@ -91,7 +91,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["services/app/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]
         },
         {
           "type": "task_target_exists",
@@ -113,7 +113,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["services/app/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]
         },
         {
           "type": "task_target_exists",

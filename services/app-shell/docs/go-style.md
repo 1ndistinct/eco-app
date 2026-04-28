@@ -1,6 +1,6 @@
 # Golang Style Guide
 
-`services/app/` uses this guide for new and changed Go code. Apply it incrementally when touching legacy code rather than widening a change only for style cleanup.
+`services/app-shell/` and `services/app-todo/` use this guide for new and changed Go code. Apply it incrementally when touching legacy code rather than widening a change only for style cleanup.
 
 ## References
 

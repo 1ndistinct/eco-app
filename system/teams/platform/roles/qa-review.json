@@ -9,7 +9,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["services/app/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]
         },
         {
           "type": "task_target_exists",
@@ -35,7 +35,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["services/app/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]
         },
         {
           "type": "task_target_exists",
@@ -61,7 +61,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["services/app/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]
         },
         {
           "type": "task_target_exists",
@@ -88,7 +88,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["services/app/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]
         },
         {
           "type": "task_target_exists",
@@ -110,7 +110,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["services/app/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**", "services/web/**", "deploy/**", "Taskfile.yml", "Tiltfile"]
         },
         {
           "type": "task_target_exists",

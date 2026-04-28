@@ -9,7 +9,7 @@
       "when": [
         {
           "type": "changed_file_matches",
-          "match_any": ["services/app/**", "services/web/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]
+          "match_any": ["services/app-shell/**", "services/app-todo/**", "services/web/**", "services/api/**", "deploy/**", "Taskfile.yml", "Tiltfile", "go.mod", "go.sum"]
         },
         {
           "type": "task_target_exists",

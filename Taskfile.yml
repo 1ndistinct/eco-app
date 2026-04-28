@@ -54,12 +54,12 @@ tasks:
   user:create:cluster:
     desc: Provision a user inside the deployed cluster and print the generated password
     cmds:
-      - sh ./services/app/scripts/create-cluster-user.sh
+      - sh ./services/app-shell/scripts/create-cluster-user.sh
 
   test:backend:
     desc: Run backend tests
     cmds:
-      - go test ./services/app/... ./services/app-shell/... ./services/app-todo/...
+      - go test ./services/app-shell/... ./services/app-todo/...
 
   test:frontend:
     desc: Run frontend unit tests
@@ -88,7 +88,7 @@ tasks:
   lint:backend:
     desc: Run backend formatting checks
     cmds:
-      - sh -c 'out=$(gofmt -l $(find services/app services/app-shell services/app-todo -name "*.go" -type f)); test -z "$out" || { printf "gofmt required for:\n%s\n" "$out" >&2; exit 1; }'
+      - sh -c 'out=$(gofmt -l $(find services/app-shell services/app-todo -name "*.go" -type f)); test -z "$out" || { printf "gofmt required for:\n%s\n" "$out" >&2; exit 1; }'
 
   lint:frontend:
     desc: Run frontend linting

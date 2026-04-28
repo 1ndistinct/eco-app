@@ -3,13 +3,15 @@
 This repository is the standard multi-service starting point for echo-agentic-todo-postfix-20260411210213.
 
 ## Services
-- services/app: Go backend
-- services/web: React frontend
+- services/app-shell: Go shell backend for auth, sessions, workspaces, and collaborators
+- services/app-todo: Go todo backend for `/api/todos` and SSE updates
+- services/web: React shell frontend
+- services/web-todo: Federated React todo frontend served from `/todo`
 
 ## Data
 - Todos are stored in Postgres.
-- Goose migrations are embedded in the backend image.
-- Helm deploys a migration Job before the app becomes ready, and the app waits for the latest migration version on startup.
+- Goose migrations are embedded in the backend images.
+- Helm deploys migration Jobs before the shell and todo APIs become ready, and both services wait for the latest migration version on startup.
 - Users are keyed by email, passwords are stored as hashes, and sessions are stored server-side in Postgres.
 - Users can own multiple named workspaces with descriptions, and workspaces can be shared with collaborators who currently receive the same permissions as the owner.
 
@@ -49,7 +51,7 @@ This repository is the standard multi-service starting point for echo-agentic-to
 - Register `https://eco.treehousehl.com/api/auth/google/callback` as the Google OAuth redirect URI for the `tm` deployment.
 
 ## Ingress
-- `task deploy:docker` deploys both services behind a Traefik `IngressRoute`.
+- `task deploy:docker` deploys the shell API, todo API, shell frontend, and todo frontend behind a Traefik `IngressRoute`.
 - `task k3d:bootstrap` creates the expected `echo` k3d cluster and `echo-registry.localhost` registry.
 - `deploy/k3d/local.values.yaml` is the default local-machine k3d values file.
 - `deploy/k3d/tm.values.yaml` is the `tm`-specific k3d values file.

@@ -16,7 +16,6 @@ deploy_deps = [
   "go.mod",
   "deploy/helm",
   "deploy/k3d",
-  "services/app",
   "services/app-shell",
   "services/app-todo",
   "services/web",

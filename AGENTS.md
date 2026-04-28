@@ -5,7 +5,7 @@ Build and maintain echo-agentic-todo-postfix-20260411210213 as a standard multi-
 
 ## Repo Navigation
 - Start with notes/index.md.
-- Main services live under services/app and services/web.
+- Main services live under services/app-shell, services/app-todo, services/web, and services/web-todo.
 - Deployment assets live under deploy/helm/app and deploy/k3d.
 
 ## Repo Conventions
@@ -14,7 +14,7 @@ Build and maintain echo-agentic-todo-postfix-20260411210213 as a standard multi-
 - Use notes/ for workspace rules, ADRs, and task handoffs.
 
 ## Style Guides
-- Backend: Go, using `services/app/docs/go-style.md` for new and changed backend code.
+- Backend: Go, using `services/app-shell/docs/go-style.md` for new and changed backend code.
 - Frontend: React + Vite + TypeScript.
 - Prefer Taskfile commands for local work.
 
