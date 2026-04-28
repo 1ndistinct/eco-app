@@ -570,7 +570,7 @@ export default function TodoFeature({
                                   onClick={() => handleDeleteTodo(todo)}
                                   aria-label={
                                     isDeleting ? `Deleting ${todo.title}` : `Delete ${todo.title}`
-                                  } 
+                                  }
                                 >
                                   {isDeleting ? (
                                     <CircularProgress size={18} color="inherit" />
@@ -715,7 +715,7 @@ export default function TodoFeature({
                                   onClick={() => handleDeleteTodo(todo)}
                                   aria-label={
                                     isDeleting ? `Deleting ${todo.title}` : `Delete ${todo.title}`
-                                  } 
+                                  }
                                 >
                                   {isDeleting ? (
                                     <CircularProgress size={18} color="inherit" />
