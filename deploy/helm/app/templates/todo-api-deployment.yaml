@@ -23,6 +23,12 @@ spec:
               value: {{ include "app.databaseURL" . | quote }}
             - name: NATS_URL
               value: "nats://{{ include "app.natsServiceName" . }}:{{ .Values.nats.port }}"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.service.appPort }}
+            periodSeconds: 5
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /healthz

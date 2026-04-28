@@ -27,6 +27,12 @@ spec:
               value: {{ .Values.googleOAuth.clientSecret | quote }}
             - name: GOOGLE_OAUTH_PUBLIC_BASE_URL
               value: {{ .Values.googleOAuth.publicBaseURL | quote }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.service.appPort }}
+            periodSeconds: 5
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /healthz
