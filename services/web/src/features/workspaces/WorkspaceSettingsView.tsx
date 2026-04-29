@@ -106,7 +106,7 @@ export function WorkspaceSettingsView({
               elevation={0}
               sx={(theme) => ({
                 p: "1rem 1.125rem",
-                borderRadius: 3,
+                borderRadius: "1rem",
                 border: `1px solid ${alpha(theme.palette.error.main, 0.22)}`,
                 backgroundColor: alpha(theme.palette.error.light, 0.08),
                 boxShadow: "none",
@@ -132,7 +132,7 @@ export function WorkspaceSettingsView({
                     }
                     sx={(theme) => ({
                       alignSelf: "flex-start",
-                      borderRadius: "var(--control-radius)",
+                      borderRadius: "0.625rem",
                       backgroundColor: theme.palette.error.main,
                       borderColor: theme.palette.error.main,
                       color: theme.palette.error.contrastText,
