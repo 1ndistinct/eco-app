@@ -14,6 +14,7 @@ export default defineConfig(() => {
       !isTest &&
         federation({
           name: "shellApp",
+          hostInitInjectLocation: "entry",
           remotes: {
             todoApp: {
               type: "module",
