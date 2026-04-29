@@ -14,9 +14,11 @@ export default defineConfig({
       },
       shared: {
         react: {
+          import: false,
           singleton: true,
         },
         "react-dom": {
+          import: false,
           singleton: true,
         },
         "@mui/material": {
