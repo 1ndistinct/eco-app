@@ -53,6 +53,22 @@ function workspaceItemsResponse(
   );
 }
 
+function shareListResponse(
+  items: Array<Record<string, unknown>> = [],
+  workspaceId = "workspace-1",
+) {
+  return new Response(
+    JSON.stringify({
+      items,
+      workspaceId,
+    }),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
 function setMatchMedia(matches: boolean) {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
@@ -278,6 +294,63 @@ describe("App", () => {
       body: JSON.stringify({
         newPassword: "replacement-password-456",
       }),
+    });
+  });
+
+  it("changes the password from settings after login", async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url === "/api/auth/session") {
+        return new Response(JSON.stringify(authenticatedSession()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url === "/api/todos?workspace=workspace-1") {
+        return workspaceItemsResponse([], "workspace-1");
+      }
+
+      if (url === "/api/shares?workspace=workspace-1") {
+        return shareListResponse([], "workspace-1");
+      }
+
+      if (url === "/api/auth/reset-password") {
+        return new Response(JSON.stringify(authenticatedSession()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /open settings/i }));
+
+    const dialog = await screen.findByRole("dialog", { name: /settings/i });
+    fireEvent.change(within(dialog).getByLabelText(/current password/i), {
+      target: { value: "owner-password-123" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/new password/i), {
+      target: { value: "replacement-password-456" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: /update password/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: /settings/i })).not.toBeInTheDocument();
+    });
+    expect(await screen.findByText("Password updated.")).toBeInTheDocument();
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/auth/reset-password");
+    expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body))).toEqual({
+      currentPassword: "owner-password-123",
+      newPassword: "replacement-password-456",
     });
   });
 

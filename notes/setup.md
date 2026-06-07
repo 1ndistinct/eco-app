@@ -42,6 +42,7 @@ Keep local-only OAuth values in a separate Helm values file such as `deploy/k3d/
 Google login only succeeds when the verified Google account is a Gmail address and exactly matches an already-provisioned user email.
 Google-authenticated provisioned users still must complete the initial password reset before todo or share access unlocks.
 That first-login password setup only requires the new password because the authenticated session already proves identity.
+After first login, signed-in users can change their password from Settings with the current password plus a new password.
 Default external routing uses one Traefik host with path-based endpoints:
 - local frontend: http://eco.localhost/
 - local backend: http://eco.localhost/api/healthz

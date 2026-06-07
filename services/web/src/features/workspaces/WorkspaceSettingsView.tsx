@@ -1,6 +1,9 @@
+import { FormEvent } from "react";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import PasswordRoundedIcon from "@mui/icons-material/PasswordRounded";
 import {
+  Alert,
   Box,
   CircularProgress,
   Dialog,
@@ -8,6 +11,7 @@ import {
   DialogTitle,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
@@ -18,19 +22,35 @@ import { formatWorkspaceLabel } from "./workspaceLabels";
 
 type WorkspaceSettingsViewProps = {
   open: boolean;
+  currentUserEmail?: string;
   currentWorkspace?: WorkspaceAccess;
   canManageCurrentWorkspace: boolean;
+  resetCurrentPassword: string;
+  resetNewPassword: string;
+  resetError: string | null;
+  isSubmittingPasswordReset: boolean;
   deletingWorkspaceId: string | null;
   onClose: () => void;
+  onCurrentPasswordChange: (value: string) => void;
+  onNewPasswordChange: (value: string) => void;
+  onSubmitPasswordReset: (event: FormEvent<HTMLFormElement>) => void;
   onDeleteWorkspace: () => void;
 };
 
 export function WorkspaceSettingsView({
   open,
+  currentUserEmail,
   currentWorkspace,
   canManageCurrentWorkspace,
+  resetCurrentPassword,
+  resetNewPassword,
+  resetError,
+  isSubmittingPasswordReset,
   deletingWorkspaceId,
   onClose,
+  onCurrentPasswordChange,
+  onNewPasswordChange,
+  onSubmitPasswordReset,
   onDeleteWorkspace,
 }: WorkspaceSettingsViewProps) {
   return (
@@ -101,6 +121,68 @@ export function WorkspaceSettingsView({
                 <Typography>{currentWorkspace.role}</Typography>
               </Box>
             </Stack>
+
+            <Paper
+              elevation={0}
+              sx={(theme) => ({
+                p: "1rem 1.125rem",
+                borderRadius: "1rem",
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.16)}`,
+                backgroundColor: alpha(theme.palette.common.white, 0.82),
+                boxShadow: "none",
+              })}
+            >
+              <Stack spacing={1.5}>
+                <Box>
+                  <Typography variant="h6">Password</Typography>
+                  <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                    Update the password for {currentUserEmail ?? "your account"}.
+                  </Typography>
+                </Box>
+
+                <Box component="form" onSubmit={onSubmitPasswordReset}>
+                  <Stack spacing={2}>
+                    <TextField
+                      label="Current password"
+                      type="password"
+                      value={resetCurrentPassword}
+                      onChange={(event) => onCurrentPasswordChange(event.target.value)}
+                      autoComplete="current-password"
+                      disabled={isSubmittingPasswordReset}
+                      fullWidth
+                    />
+                    <TextField
+                      label="New password"
+                      type="password"
+                      value={resetNewPassword}
+                      onChange={(event) => onNewPasswordChange(event.target.value)}
+                      autoComplete="new-password"
+                      helperText="Use at least 12 characters."
+                      disabled={isSubmittingPasswordReset}
+                      fullWidth
+                    />
+                    <AppButton
+                      type="submit"
+                      variant="contained"
+                      color="primary"
+                      disabled={isSubmittingPasswordReset}
+                      startIcon={
+                        isSubmittingPasswordReset ? (
+                          <CircularProgress size={18} color="inherit" />
+                        ) : (
+                          <PasswordRoundedIcon />
+                        )
+                      }
+                      sx={{ alignSelf: "flex-start" }}
+                    >
+                      {isSubmittingPasswordReset ? "Updating..." : "Update password"}
+                    </AppButton>
+                  </Stack>
+                </Box>
+
+                {resetError ? <Alert severity="error">{resetError}</Alert> : null}
+              </Stack>
+            </Paper>
 
             <Paper
               elevation={0}
