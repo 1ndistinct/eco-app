@@ -22,6 +22,8 @@ Use Taskfile commands for echo-agentic-todo-postfix-20260411210213.
 - task cleanup
 - tilt ci
 
+The frontend workspace allowlists `esbuild` build scripts in `pnpm-workspace.yaml` so local installs and container builds stay non-interactive under pnpm v11.
+
 The agent-oriented BuildKit path uses task deploy and pushes to k3d-echo-registry.localhost:5000 by default.
 The human Docker path uses task deploy:docker and pushes to localhost:5001 by default so a host Docker daemon can publish into the same local k3d registry.
 Set PUSH_REGISTRY and CLUSTER_REGISTRY together when you want Docker pushes and cluster pulls to use a different registry.

@@ -1,3 +1,6 @@
 packages:
   - services/web
   - services/web-todo
+
+allowBuilds:
+  esbuild: true
