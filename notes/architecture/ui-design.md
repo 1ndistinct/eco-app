@@ -86,6 +86,7 @@ This note captures the current visual system for `services/web`.
 ## Interaction Notes
 
 - Workspace settings opens as a centered modal, not as a full page mode.
+- The settings modal owns the normal in-session password-change flow as well as workspace metadata and destructive actions.
 - Create workspace and collaborators use the same anchored popover pattern rather than modal flows.
 - On desktop, the workspace chrome uses an expandable left sidebar instead of a top header.
 - The desktop sidebar should own workspace context and controls:

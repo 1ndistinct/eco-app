@@ -30,6 +30,14 @@
 {{ include "app.fullname" . }}-postgres
 {{- end -}}
 
+{{- define "app.postgresPvcName" -}}
+{{- if .Values.postgres.persistence.existingClaim -}}
+{{ .Values.postgres.persistence.existingClaim }}
+{{- else -}}
+{{ include "app.postgresServiceName" . }}
+{{- end -}}
+{{- end -}}
+
 {{- define "app.natsServiceName" -}}
 {{ include "app.fullname" . }}-nats
 {{- end -}}

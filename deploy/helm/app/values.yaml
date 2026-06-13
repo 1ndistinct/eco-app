@@ -29,6 +29,12 @@ postgres:
   password: app
   database: app
   port: 5432
+  persistence:
+    enabled: true
+    existingClaim: ""
+    accessMode: ReadWriteOnce
+    size: 5Gi
+    storageClassName: ""
 
 nats:
   port: 4222

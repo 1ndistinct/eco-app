@@ -97,6 +97,7 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
+  const [resetCurrentPassword, setResetCurrentPassword] = useState("");
   const [resetNewPassword, setResetNewPassword] = useState("");
   const [resetError, setResetError] = useState<string | null>(null);
   const [isSubmittingPasswordReset, setIsSubmittingPasswordReset] = useState(false);
@@ -166,6 +167,7 @@ export default function App() {
       setSelectedWorkspaceId(nextSelection.workspaceId);
       setSelectedAppId(nextSelection.appId);
       setIsWorkspaceSettingsOpen(false);
+      resetPasswordForm();
       setWorkspaceError(null);
       setShareEmail("");
       setShareError(null);
@@ -329,11 +331,18 @@ export default function App() {
     };
   }, [selectedWorkspaceId, sessionState.authenticated, sessionState.user?.passwordResetRequired]);
 
+  function resetPasswordForm() {
+    setResetCurrentPassword("");
+    setResetNewPassword("");
+    setResetError(null);
+  }
+
   function handleWorkspaceChange(workspaceId: string) {
     setSelectedWorkspaceId(workspaceId);
     updateWorkspaceLocation(workspaceId, selectedAppId, "push");
     setIsMobileAppDrawerOpen(false);
     setIsWorkspaceSettingsOpen(false);
+    resetPasswordForm();
     setWorkspaceError(null);
     setShareEmail("");
     setShareError(null);
@@ -359,6 +368,7 @@ export default function App() {
     setCreateWorkspaceError(null);
     setWorkspaceManageError(null);
     setWorkspaceSuccess(null);
+    resetPasswordForm();
     resetCreateWorkspaceForm();
     setCreateWorkspaceAnchorEl(anchorEl);
   }
@@ -376,6 +386,31 @@ export default function App() {
   function resetCreateWorkspaceForm() {
     setWorkspaceName("");
     setWorkspaceDescription("");
+  }
+
+  function handleToggleWorkspaceSettings() {
+    setCreateWorkspaceAnchorEl(null);
+    setCreateWorkspaceError(null);
+    setWorkspaceManageError(null);
+    setWorkspaceSuccess(null);
+    setCollaboratorMenuAnchorEl(null);
+
+    setIsWorkspaceSettingsOpen((current) => {
+      const next = !current;
+
+      if (next) {
+        resetPasswordForm();
+      } else {
+        resetPasswordForm();
+      }
+
+      return next;
+    });
+  }
+
+  function handleCloseWorkspaceSettings() {
+    setIsWorkspaceSettingsOpen(false);
+    resetPasswordForm();
   }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -410,16 +445,31 @@ export default function App() {
 
   async function handlePasswordReset(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const requiresCurrentPassword = sessionState.user?.passwordResetRequired !== true;
+
+    if (requiresCurrentPassword && resetCurrentPassword.trim() === "") {
+      setResetError("Current password is required.");
+      return;
+    }
+
     setIsSubmittingPasswordReset(true);
     setResetError(null);
+    setWorkspaceSuccess(null);
+    setWorkspaceManageError(null);
 
     try {
+      const payload: Record<string, string> = {
+        newPassword: resetNewPassword,
+      };
+
+      if (requiresCurrentPassword) {
+        payload.currentPassword = resetCurrentPassword;
+      }
+
       const response = await fetch(RESET_PASSWORD_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          newPassword: resetNewPassword,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -428,7 +478,10 @@ export default function App() {
 
       const nextSession = normalizeSessionState((await response.json()) as Partial<SessionState>);
       applySessionState(nextSession);
-      setResetNewPassword("");
+      resetPasswordForm();
+      if (requiresCurrentPassword) {
+        setWorkspaceSuccess("Password updated.");
+      }
     } catch (error) {
       setResetError(error instanceof Error ? error.message : "Unable to save password.");
     } finally {
@@ -438,7 +491,7 @@ export default function App() {
 
   async function handleLogout() {
     setLoginError(null);
-    setResetError(null);
+    resetPasswordForm();
     setWorkspaceManageError(null);
     setWorkspaceSuccess(null);
     setCollaboratorMenuAnchorEl(null);
@@ -453,7 +506,6 @@ export default function App() {
       await fetch(LOGOUT_ENDPOINT, { method: "POST" });
     } finally {
       setLoginPassword("");
-      setResetNewPassword("");
       setIsWorkspaceSettingsOpen(false);
       await loadSession().catch((error) => {
         setSessionState(UNAUTHENTICATED_SESSION);
@@ -767,7 +819,7 @@ export default function App() {
             onShareWorkspace={handleShareWorkspace}
             onRemoveCollaborator={handleRemoveCollaborator}
             onToggleSidebar={() => setIsDesktopSidebarExpanded((current) => !current)}
-            onToggleSettings={() => setIsWorkspaceSettingsOpen((current) => !current)}
+            onToggleSettings={handleToggleWorkspaceSettings}
             onLogout={handleLogout}
           />
         </Box>
@@ -800,7 +852,7 @@ export default function App() {
             onShareWorkspace={handleShareWorkspace}
             onRemoveCollaborator={handleRemoveCollaborator}
             onToggleSidebar={() => setIsMobileAppDrawerOpen((current) => !current)}
-            onToggleSettings={() => setIsWorkspaceSettingsOpen((current) => !current)}
+            onToggleSettings={handleToggleWorkspaceSettings}
             onLogout={handleLogout}
           />
         </Box>
@@ -826,10 +878,18 @@ export default function App() {
 
       <WorkspaceSettingsView
         open={isWorkspaceSettingsOpen}
+        currentUserEmail={sessionState.user?.email}
         currentWorkspace={currentWorkspace}
         canManageCurrentWorkspace={canManageCurrentWorkspace}
+        resetCurrentPassword={resetCurrentPassword}
+        resetNewPassword={resetNewPassword}
+        resetError={resetError}
+        isSubmittingPasswordReset={isSubmittingPasswordReset}
         deletingWorkspaceId={deletingWorkspaceId}
-        onClose={() => setIsWorkspaceSettingsOpen(false)}
+        onClose={handleCloseWorkspaceSettings}
+        onCurrentPasswordChange={setResetCurrentPassword}
+        onNewPasswordChange={setResetNewPassword}
+        onSubmitPasswordReset={handlePasswordReset}
         onDeleteWorkspace={handleDeleteWorkspace}
       />
 

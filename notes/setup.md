@@ -22,6 +22,8 @@ Use Taskfile commands for echo-agentic-todo-postfix-20260411210213.
 - task cleanup
 - tilt ci
 
+The frontend workspace allowlists `esbuild` build scripts in `pnpm-workspace.yaml` so local installs and container builds stay non-interactive under pnpm v11.
+
 The agent-oriented BuildKit path uses task deploy and pushes to k3d-echo-registry.localhost:5000 by default.
 The human Docker path uses task deploy:docker and pushes to localhost:5001 by default so a host Docker daemon can publish into the same local k3d registry.
 Set PUSH_REGISTRY and CLUSTER_REGISTRY together when you want Docker pushes and cluster pulls to use a different registry.
@@ -42,6 +44,7 @@ Keep local-only OAuth values in a separate Helm values file such as `deploy/k3d/
 Google login only succeeds when the verified Google account is a Gmail address and exactly matches an already-provisioned user email.
 Google-authenticated provisioned users still must complete the initial password reset before todo or share access unlocks.
 That first-login password setup only requires the new password because the authenticated session already proves identity.
+After first login, signed-in users can change their password from Settings with the current password plus a new password.
 Default external routing uses one Traefik host with path-based endpoints:
 - local frontend: http://eco.localhost/
 - local nicole route: http://eco.localhost/nicole/workspaces/<workspace-id>
@@ -60,6 +63,8 @@ Register `https://eco.treehousehl.com/api/auth/google/callback` as the Google OA
 The standard `tm` Docker deploy path with Google OAuth is:
 - `task deploy:docker:tm`
 `task deploy:docker:tm` always uses `deploy/k3d/tm.values.yaml` and automatically loads `deploy/k3d/tm.secrets.yaml` when that file exists. Override `K3D_SECRETS_FILE` if you need a different local-only secrets file.
+Postgres in `deploy/helm/app` now defaults to PVC-backed storage. The chart creates and mounts a persistent volume claim unless `postgres.persistence.existingClaim` is set.
+The `tm` values file points Helm at the existing live claim with `postgres.persistence.existingClaim=app-postgres` so upgrades keep the current database volume instead of replacing it.
 Set `INGRESS_HOST=<host>` when you want to force a single ingress host for a one-off run.
 Use task probe:app:external and task probe:web:external to verify the ingress path from the host.
 The default repo validation paths now run the browser flow as well:
