@@ -47,12 +47,14 @@ That first-login password setup only requires the new password because the authe
 After first login, signed-in users can change their password from Settings with the current password plus a new password.
 Default external routing uses one Traefik host with path-based endpoints:
 - local frontend: http://eco.localhost/
+  The root path now lands on the Nicole workspace remote by default after session bootstrap.
 - local nicole route: http://eco.localhost/nicole/workspaces/<workspace-id>
 - local backend: http://eco.localhost/api/healthz
 - local nicole remote entry: http://eco.localhost/nicole/remoteEntry.js
 The local-machine k3d environment default lives in `deploy/k3d/local.values.yaml`.
 Use `K3D_VALUES_FILE=./deploy/k3d/tm.values.yaml` on `tm` to deploy with:
 - frontend: http://192.168.1.84/
+  The root path now lands on the Nicole workspace remote by default after session bootstrap.
 - nicole route: http://192.168.1.84/nicole/workspaces/<workspace-id>
 - backend: http://192.168.1.84/api/healthz
 - alias: http://eco.treehousehl.com/

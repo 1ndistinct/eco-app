@@ -91,6 +91,8 @@ describe("App", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(async () => undefined);
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     setMatchMedia(false);
     window.history.replaceState({}, "", "/");
   });
@@ -136,6 +138,8 @@ describe("App", () => {
   });
 
   it("logs in and loads the selected workspace", async () => {
+    window.history.replaceState({}, "", "/todo/workspaces/workspace-1");
+
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
 
@@ -202,6 +206,47 @@ describe("App", () => {
         "/api/shares?workspace=workspace-1",
       ]),
     );
+  });
+
+  it("lands on the Nicole app after logging in from the root path", async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: false }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url === "/api/auth/login") {
+        return new Response(JSON.stringify(authenticatedSession()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url === "/api/shares?workspace=workspace-1") {
+        return shareListResponse([], "workspace-1");
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<App />);
+
+    fireEvent.change(await screen.findByLabelText(/email/i), {
+      target: { value: "owner@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^password$/i), {
+      target: { value: "owner-password-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    expect(await screen.findByRole("button", { name: /open card/i })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/nicole/workspaces/workspace-1");
+    expect(fetchMock.mock.calls.map(([url]) => url)).toContain("/api/shares?workspace=workspace-1");
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain("/api/todos?workspace=workspace-1");
   });
 
   it("loads the workspace selected in the URL path on refresh", async () => {
@@ -278,9 +323,34 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(
-      await screen.findByRole("heading", { name: /happy birthday, nicole/i }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /open card/i })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/nicole/workspaces/workspace-1");
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain(
+      "/api/todos?workspace=workspace-1",
+    );
+  });
+
+  it("loads the Nicole app by default from the root path", async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url === "/api/auth/session") {
+        return new Response(JSON.stringify(authenticatedSession()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url === "/api/shares?workspace=workspace-1") {
+        return shareListResponse([], "workspace-1");
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: /open card/i })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/nicole/workspaces/workspace-1");
     expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain(
       "/api/todos?workspace=workspace-1",
@@ -288,6 +358,8 @@ describe("App", () => {
   });
 
   it("switches from Todos to Nicole and updates the route", async () => {
+    window.history.replaceState({}, "", "/todo/workspaces/workspace-1");
+
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
 
@@ -329,13 +401,13 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /open nicole app/i }));
 
-    expect(
-      await screen.findByRole("heading", { name: /happy birthday, nicole/i }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /open card/i })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/nicole/workspaces/workspace-1");
   });
 
   it("forces a password reset before workspace data loads", async () => {
+    window.history.replaceState({}, "", "/todo/workspaces/workspace-1");
+
     fetchMock
       .mockResolvedValueOnce(
         new Response(JSON.stringify(authenticatedSession(true)), {
@@ -380,6 +452,8 @@ describe("App", () => {
   });
 
   it("changes the password from settings after login", async () => {
+    window.history.replaceState({}, "", "/todo/workspaces/workspace-1");
+
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);
 
@@ -437,6 +511,8 @@ describe("App", () => {
   });
 
   it("reloads the signed-out session after logout so Google login remains available", async () => {
+    window.history.replaceState({}, "", "/todo/workspaces/workspace-1");
+
     let sessionRequestCount = 0;
     fetchMock.mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input.toString();
@@ -500,6 +576,8 @@ describe("App", () => {
   });
 
   it("creates, edits, shares, updates, and deletes todos inside the workspace app", async () => {
+    window.history.replaceState({}, "", "/todo/workspaces/workspace-1");
+
     fetchMock
       .mockResolvedValueOnce(
         new Response(JSON.stringify(authenticatedSession()), {
@@ -699,6 +777,8 @@ describe("App", () => {
   });
 
   it("lists collaborators in the header dropdown and removes them without exposing owner deletion", async () => {
+    window.history.replaceState({}, "", "/todo/workspaces/workspace-1");
+
     fetchMock
       .mockResolvedValueOnce(
         new Response(JSON.stringify(authenticatedSession()), {
@@ -755,6 +835,8 @@ describe("App", () => {
   });
 
   it("creates a workspace from the header and deletes it from settings", async () => {
+    window.history.replaceState({}, "", "/todo/workspaces/workspace-1");
+
     fetchMock
       .mockResolvedValueOnce(
         new Response(JSON.stringify(authenticatedSession()), {
@@ -846,6 +928,8 @@ describe("App", () => {
   });
 
   it("updates the URL when switching workspaces", async () => {
+    window.history.replaceState({}, "", "/todo/workspaces/workspace-1");
+
     fetchMock
       .mockResolvedValueOnce(
         new Response(
@@ -917,6 +1001,7 @@ describe("App", () => {
     });
     const createWorkspaceButton = screen.getByRole("button", { name: /create workspace/i });
     const collaboratorsButton = screen.getByRole("button", { name: /open collaborators/i });
+    const nicoleButton = screen.getByRole("button", { name: /open nicole app/i });
     const settingsButton = screen.getByRole("button", { name: /open settings/i });
     const todosButton = screen.getByRole("button", { name: /open todos app/i });
 
@@ -927,6 +1012,9 @@ describe("App", () => {
     ).toBeTruthy();
     expect(
       collaboratorsButton.compareDocumentPosition(todosButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      nicoleButton.compareDocumentPosition(todosButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
       todosButton.compareDocumentPosition(settingsButton) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -975,6 +1063,7 @@ describe("App", () => {
 
   it("shows a mobile workspace selector popover with switching and create actions", async () => {
     setMatchMedia(true);
+    window.history.replaceState({}, "", "/todo/workspaces/workspace-1");
 
     fetchMock.mockImplementation(async (input) => {
       const url = String(input);

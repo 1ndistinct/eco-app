@@ -19,7 +19,11 @@ import {
   WorkspaceAccess,
   WorkspaceShare,
 } from "./app/types";
-import { DEFAULT_WORKSPACE_APP_ID, WorkspaceAppId } from "./app/workspaceApps";
+import {
+  DEFAULT_LANDING_WORKSPACE_APP_ID,
+  DEFAULT_WORKSPACE_APP_ID,
+  WorkspaceAppId,
+} from "./app/workspaceApps";
 import { buildWorkspacePath, readWorkspaceLocationFromPath } from "./app/workspaceRouting";
 import { AuthShell } from "./features/auth/AuthShell";
 import { LoginView } from "./features/auth/LoginView";
@@ -55,7 +59,14 @@ function resetTransientWorkspaceState() {
 function readSelectedWorkspaceIdFromLocation() {
   if (typeof window === "undefined") {
     return {
-      appId: DEFAULT_WORKSPACE_APP_ID,
+      appId: DEFAULT_LANDING_WORKSPACE_APP_ID,
+      workspaceId: "",
+    };
+  }
+
+  if (window.location.pathname === "/") {
+    return {
+      appId: DEFAULT_LANDING_WORKSPACE_APP_ID,
       workspaceId: "",
     };
   }

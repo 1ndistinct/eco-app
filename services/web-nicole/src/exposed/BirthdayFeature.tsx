@@ -1,8 +1,12 @@
-import LaunchRoundedIcon from "@mui/icons-material/LaunchRounded";
-import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
-import { Box, Stack, Typography } from "@mui/material";
+import AutorenewRoundedIcon from "@mui/icons-material/AutorenewRounded";
+import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
+import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
+import { Box, Stack } from "@mui/material";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
-import { heroPhotos, orbitNotes, photoWall, renderCards } from "../data";
+import birthdayTrack from "../assets/audio/Arabella.mp3";
+import entryPhoto from "../assets/library/IMG_6615.jpg";
+import { featuredPhotoIds, photoLibrary, type PhotoLibraryItem } from "../data";
 import "./birthdayFeature.css";
 
 export type BirthdayFeatureProps = {
@@ -11,163 +15,224 @@ export type BirthdayFeatureProps = {
   currentUserEmail?: string;
 };
 
-const traitBadges = [
-  "Jazz loyalist",
-  "V60 specialist",
-  "OSINT enthusiast",
-  "3D side quests",
-  "Kyiv roots",
-  "Jewish joy",
-  "Marketing brain",
-];
+type PlaybackState = "idle" | "playing" | "paused" | "blocked";
 
-export default function BirthdayFeature({ workspaceName }: BirthdayFeatureProps) {
+type SelectedPhoto = PhotoLibraryItem & {
+  tilt: number;
+};
+
+const TRACK_VOLUME = 0.34;
+const PHOTO_SET_SIZE = 6;
+
+const birthdayMessage =
+  "Happy birthday, Nicole. I wanted this to feel less like a page and more like a little place made for you: a running library of the moments that matter, the photos that feel like us, and the kind of memories that are better when they stay easy to revisit.";
+
+const shortVersion =
+  "Short version: life with you is brighter, sharper, funnier, and more interesting, and I wanted one corner of the app that feels personal enough to keep filling in over time.";
+
+function shuffleItems<T>(items: T[]) {
+  const copy = [...items];
+
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    const current = copy[index];
+
+    copy[index] = copy[swapIndex];
+    copy[swapIndex] = current;
+  }
+
+  return copy;
+}
+
+function withTilt(items: PhotoLibraryItem[]) {
+  return items.map((item) => ({
+    ...item,
+    tilt: Number((Math.random() * 7 - 3.5).toFixed(2)),
+  }));
+}
+
+function buildInitialSelection() {
+  const featuredLookup = new Set(featuredPhotoIds);
+  const featured = featuredPhotoIds
+    .map((photoId) => photoLibrary.find((photo) => photo.id === photoId))
+    .filter((photo): photo is PhotoLibraryItem => Boolean(photo));
+  const remainder = photoLibrary.filter((photo) => !featuredLookup.has(photo.id));
+
+  return withTilt([...featured, ...remainder.slice(0, Math.max(0, PHOTO_SET_SIZE - featured.length))].slice(0, PHOTO_SET_SIZE));
+}
+
+function buildNextSelection(currentIds: string[]) {
+  const currentIdLookup = new Set(currentIds);
+  const available = photoLibrary.filter((photo) => !currentIdLookup.has(photo.id));
+
+  if (available.length >= PHOTO_SET_SIZE) {
+    return withTilt(shuffleItems(available).slice(0, PHOTO_SET_SIZE));
+  }
+
+  const shuffled = shuffleItems(photoLibrary).slice(0, Math.min(PHOTO_SET_SIZE, photoLibrary.length));
+  const shuffledIds = shuffled.map((photo) => photo.id).join("|");
+  const currentKey = currentIds.join("|");
+
+  if (shuffledIds !== currentKey) {
+    return withTilt(shuffled);
+  }
+
+  return withTilt(shuffleItems([...photoLibrary].reverse()).slice(0, Math.min(PHOTO_SET_SIZE, photoLibrary.length)));
+}
+
+export default function BirthdayFeature(_props: BirthdayFeatureProps) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [hasOpenedCard, setHasOpenedCard] = useState(false);
+  const [playbackState, setPlaybackState] = useState<PlaybackState>("idle");
+  const [selectedPhotos, setSelectedPhotos] = useState<SelectedPhoto[]>(() => buildInitialSelection());
+
+  useEffect(() => {
+    const audio = audioRef.current;
+
+    if (!audio) {
+      return;
+    }
+
+    audio.volume = TRACK_VOLUME;
+    audio.loop = true;
+
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }, []);
+
+  const handleEnterExperience = async () => {
+    const audio = audioRef.current;
+
+    if (!audio) {
+      setHasOpenedCard(true);
+      return;
+    }
+
+    try {
+      await audio.play();
+      setPlaybackState("playing");
+    } catch {
+      setPlaybackState("blocked");
+    }
+
+    setHasOpenedCard(true);
+  };
+
+  const handleTogglePlayback = async () => {
+    const audio = audioRef.current;
+
+    if (!audio) {
+      return;
+    }
+
+    if (playbackState === "playing") {
+      audio.pause();
+      setPlaybackState("paused");
+      return;
+    }
+
+    try {
+      await audio.play();
+      setPlaybackState("playing");
+    } catch {
+      setPlaybackState("blocked");
+    }
+  };
+
+  const handleShufflePhotos = () => {
+    setSelectedPhotos((current) => buildNextSelection(current.map((photo) => photo.id)));
+  };
+
+  const musicButtonLabel = playbackState === "playing" ? "Pause music" : "Play music";
+
+  if (!hasOpenedCard) {
+    return (
+      <Box className="nicole-app">
+        <audio ref={audioRef} src={birthdayTrack} preload="auto" loop playsInline />
+        <div className="nicole-entry-shell">
+          <section className="nicole-card nicole-entry-card">
+            <img className="nicole-entry-photo" src={entryPhoto} alt="Nicole on the opening card" />
+            <p className="nicole-kicker">Happy birthday</p>
+            <h1 className="nicole-title">Open card</h1>
+            <button
+              type="button"
+              className="nicole-entry-button"
+              onClick={() => {
+                void handleEnterExperience();
+              }}
+            >
+              Open card
+            </button>
+          </section>
+        </div>
+      </Box>
+    );
+  }
+
   return (
     <Box className="nicole-app">
-      <Stack spacing={2.5} className="nicole-shell">
-        <section className="nicole-hero">
-          <article className="nicole-card nicole-hero-copy">
-            <p className="nicole-kicker">Federated birthday drop</p>
+      <audio ref={audioRef} src={birthdayTrack} preload="auto" loop playsInline />
+      <Stack spacing={2} className="nicole-shell">
+        <header className="nicole-card nicole-message-card">
+          <div className="nicole-toolbar-copy">
+            <p className="nicole-kicker">Happy birthday</p>
             <h1 className="nicole-title">Happy birthday, Nicole.</h1>
-            <p className="nicole-lead">
-              One tiny microfrontend for one very specific icon: a collage of the photos,
-              renders, obsessions, and excellent side quests that make your orbit feel brighter.
-              Jazz in the background, V60 on the counter, OSINT tabs open, and a bit of Kyiv in
-              the color palette.
-            </p>
-            {workspaceName ? (
-              <div className="nicole-runtime-pill">
-                <PlaceRoundedIcon fontSize="small" />
-                Mounted inside {workspaceName}
-              </div>
-            ) : null}
-            <div className="nicole-chip-row" aria-label="Nicole highlights">
-              {traitBadges.map((trait) => (
-                <span key={trait} className="nicole-chip">
-                  {trait}
-                </span>
-              ))}
-            </div>
-            <div className="nicole-link-row">
-              <a
-                className="nicole-link"
-                href="https://uk.linkedin.com/in/thenicoleborman"
-                target="_blank"
-                rel="noreferrer"
-              >
-                LinkedIn orbit
-                <LaunchRoundedIcon fontSize="inherit" />
-              </a>
-              <a
-                className="nicole-link"
-                href="https://www.behance.net/nborman"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Behance renders
-                <LaunchRoundedIcon fontSize="inherit" />
-              </a>
-            </div>
-          </article>
+            <p className="nicole-message">{birthdayMessage}</p>
+            <p className="nicole-short-version">{shortVersion}</p>
+          </div>
 
-          <aside className="nicole-card nicole-hero-visual">
-            <div className="nicole-hero-grid">
-              {heroPhotos.map((photo) => (
-                <figure
-                  key={photo.src}
-                  className={`nicole-photo-card ${photo.layout}`}
-                >
-                  <img src={photo.src} alt={photo.alt} />
-                  <figcaption>{photo.caption}</figcaption>
-                </figure>
-              ))}
-            </div>
-          </aside>
-        </section>
+          <div className="nicole-message-actions">
+            <button
+              type="button"
+              className="nicole-icon-button"
+              aria-label={musicButtonLabel}
+              title={musicButtonLabel}
+              onClick={() => {
+                void handleTogglePlayback();
+              }}
+            >
+              {playbackState === "playing" ? (
+                <PauseRoundedIcon fontSize="small" />
+              ) : (
+                <PlayArrowRoundedIcon fontSize="small" />
+              )}
+            </button>
+          </div>
+        </header>
 
-        <section className="nicole-orbit-grid" aria-label="Nicole orbit notes">
-          {orbitNotes.map((note) => (
-            <article key={note.title} className="nicole-card nicole-note-card">
-              <h3>{note.title}</h3>
-              <p>{note.body}</p>
-            </article>
-          ))}
-        </section>
-
-        <section className="nicole-card nicole-photo-wall">
-          <header className="nicole-section-header">
+        <section className="nicole-card nicole-library-panel">
+          <div className="nicole-library-header">
             <div>
-              <p className="nicole-section-kicker">Photo wall</p>
-              <h2 className="nicole-section-title">Everything in one place</h2>
+              <h2 className="nicole-section-title">Photo library</h2>
+              <p className="nicole-section-copy">
+                Showing {selectedPhotos.length} photos from a library of {photoLibrary.length}.
+                Refresh it any time for a different mix.
+              </p>
             </div>
-            <Typography className="nicole-section-copy">
-              A small scrapbook of the real thing: city nights, quiet moments, and the usual
-              impossible amount of glow.
-            </Typography>
-          </header>
+            <button
+              type="button"
+              className="nicole-secondary-button"
+              aria-label="Shuffle photos"
+              onClick={handleShufflePhotos}
+            >
+              <AutorenewRoundedIcon fontSize="small" />
+              New set
+            </button>
+          </div>
 
-          <div className="nicole-photo-grid">
-            {photoWall.map((photo) => (
-              <figure
-                key={photo.src}
-                className={`nicole-photo-card ${photo.layout}`}
+          <div className="nicole-photo-library">
+            {selectedPhotos.map((photo) => (
+              <article
+                key={`${photo.id}-${photo.tilt}`}
+                className="nicole-library-card"
+                style={{ "--nicole-tilt": `${photo.tilt}deg` } as CSSProperties}
               >
                 <img src={photo.src} alt={photo.alt} />
-                <figcaption>{photo.caption}</figcaption>
-              </figure>
+                <p className="nicole-photo-description">{photo.description}</p>
+              </article>
             ))}
-          </div>
-        </section>
-
-        <section>
-          <div className="nicole-section-header">
-            <div>
-              <p className="nicole-section-kicker">Render shelf</p>
-              <h2 className="nicole-section-title">Some of the fun 3D work too</h2>
-            </div>
-            <Typography className="nicole-section-copy">
-              Pulled from Behance because the birthday app should obviously include the side quests
-              that also look unfairly good.
-            </Typography>
-          </div>
-
-          <div className="nicole-renders-grid">
-            {renderCards.map((render) => (
-              <a
-                key={render.title}
-                className="nicole-card nicole-render-card"
-                href={render.href}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <img src={render.src} alt={`${render.title} render by Nicole Borman`} />
-                <div className="nicole-render-copy">
-                  <p className="nicole-render-eyebrow">Behance project</p>
-                  <h3 className="nicole-render-title">{render.title}</h3>
-                  <p className="nicole-render-note">{render.note}</p>
-                </div>
-              </a>
-            ))}
-          </div>
-        </section>
-
-        <section className="nicole-card nicole-footer-card">
-          <div>
-            <p className="nicole-section-kicker">Runtime notes</p>
-            <h2 className="nicole-section-title">The short version</h2>
-            <p className="nicole-footer-copy">
-              You are funny, brilliant, visually dangerous, and weirdly capable of making every
-              tiny hobby feel like a fully art-directed universe. This app is just a neat excuse
-              to keep all of that in one place and say happy birthday with slightly more structure
-              than a normal message.
-            </p>
-          </div>
-
-          <div className="nicole-footer-list">
-            <div className="nicole-footer-item">Coffee accuracy: high</div>
-            <div className="nicole-footer-item">OSINT curiosity: relentless</div>
-            <div className="nicole-footer-item">Jazz compatibility: native</div>
-            <div className="nicole-footer-item">Cat support: disabled by policy</div>
           </div>
         </section>
       </Stack>
