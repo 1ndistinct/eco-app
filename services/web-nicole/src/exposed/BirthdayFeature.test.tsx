@@ -34,9 +34,8 @@ describe("BirthdayFeature", () => {
     expect(screen.getByRole("button", { name: /shuffle photos/i })).toBeTruthy();
     expect(screen.getByRole("heading", { level: 2, name: /photo library/i })).toBeTruthy();
     expect(screen.queryAllByRole("textbox").length).toBe(0);
-    expect(
-      screen.getByText(/one of those frames that already feels like it belongs/i),
-    ).toBeTruthy();
+    expect(document.querySelectorAll(".nicole-library-card").length).toBe(6);
+    expect(document.querySelectorAll(".nicole-photo-description").length).toBe(6);
 
     const initialSources = Array.from(document.querySelectorAll(".nicole-library-card img")).map(
       (image) => image.getAttribute("src"),

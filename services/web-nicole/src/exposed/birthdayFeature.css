@@ -205,13 +205,14 @@
 }
 
 .nicole-photo-library {
-  column-count: 3;
-  column-gap: 1rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
 }
 
 .nicole-library-card {
-  break-inside: avoid;
-  margin: 0 0 1rem;
+  display: flex;
+  flex-direction: column;
   padding: 0.75rem;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 24px;
@@ -228,14 +229,17 @@
 
 .nicole-library-card img {
   width: 100%;
-  height: auto;
+  height: clamp(17rem, 25vw, 23rem);
   display: block;
   border-radius: 18px;
   background: rgba(246, 244, 239, 0.92);
+  object-fit: cover;
+  object-position: center;
 }
 
 .nicole-photo-description {
   margin-top: 0.8rem;
+  min-height: 4.8rem;
   line-height: 1.55;
   color: var(--nicole-muted);
 }
@@ -251,7 +255,7 @@
   }
 
   .nicole-photo-library {
-    column-count: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -268,6 +272,10 @@
   }
 
   .nicole-photo-library {
-    column-count: 1;
+    grid-template-columns: 1fr;
+  }
+
+  .nicole-library-card img {
+    height: clamp(16rem, 70vw, 22rem);
   }
 }

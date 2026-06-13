@@ -7,12 +7,12 @@ export type PhotoLibraryItem = {
 };
 
 const FEATURED_FILE_NAMES = [
-  "IMG_6689_4.jpg",
-  "IMG_6687.jpg",
-  "IMG_6671.jpg",
-  "IMG_6592.jpg",
-  "IMG_6550.jpg",
-  "0f0af00a-7876-4cc9-bb24-c35c6ab850b9.jpg",
+  "643c3a9d-ba46-4259-9807-eca73b608f48.JPG",
+  "820e515c-9eea-4032-9d44-a966408f3da5.JPG",
+  "1cbb8bc9-9029-4c00-b255-6887a861cf27.JPG",
+  "9c95df43-3640-48ca-b9bf-a9129969784b.JPG",
+  "10256d2a-028c-47a1-a08e-d47cef0e82c9.JPG",
+  "IMG_6615.jpg",
 ];
 
 const localPhotoModules = import.meta.glob(
@@ -116,6 +116,8 @@ function fileNameToDescription(fileName: string) {
       "Soft, pink, and impossible not to keep near the front of the rotation.",
     "9c95df43-3640-48ca-b9bf-a9129969784b.JPG":
       "A blurry blue little moment that still lands exactly right.",
+    "IMG_6615.jpg":
+      "A proper front-of-the-library photo: calm, sharp, and exactly the right kind of favorite.",
     "c33b2336-3885-4fdb-b05e-67693a542484.JPG":
       "Close-up proof that even the tiny in-between moments end up worth saving.",
     "db0b2101-d685-4c3f-8774-fe8ea4529b63.JPG":
