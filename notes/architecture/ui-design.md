@@ -90,12 +90,14 @@ This note captures the current visual system for `services/web`.
 - On desktop, the workspace chrome uses an expandable left sidebar instead of a top header.
 - The desktop sidebar should own workspace context and controls:
   - collapsed state is the default
+  - the sidebar app switcher chooses which federated workspace experience is mounted in the main panel
   - the top icon acts as the workspace selector trigger
   - expanded state reveals a full-width workspace picker with its collapse action on a separate row
   - create workspace and collaborators sit directly under the workspace picker
   - settings sits in the footer beside logout, and groups are separated with visible dividers
   - the main content column should not repeat workspace title/description cards above the real content
 - On mobile, app navigation collapses into a top trigger that opens a full-screen drawer.
+- The mobile drawer lists workspace apps before workspace-specific utility actions.
 - The mobile drawer toggle icon changes between open and closed states.
 - The workspace control strip keeps utility icon actions at the top right:
   - settings is a cog only

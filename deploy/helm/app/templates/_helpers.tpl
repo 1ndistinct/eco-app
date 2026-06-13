@@ -18,6 +18,10 @@
 {{ include "app.fullname" . }}-web
 {{- end -}}
 
+{{- define "app.webNicoleServiceName" -}}
+{{ include "app.fullname" . }}-web-nicole
+{{- end -}}
+
 {{- define "app.webTodoServiceName" -}}
 {{ include "app.fullname" . }}-web-todo
 {{- end -}}

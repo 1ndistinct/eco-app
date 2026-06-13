@@ -237,6 +237,88 @@ describe("App", () => {
     );
   });
 
+  it("loads the Nicole app when the route selects it", async () => {
+    window.history.replaceState({}, "", "/nicole/workspaces/workspace-1");
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url === "/api/auth/session") {
+        return new Response(JSON.stringify(authenticatedSession()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url === "/api/shares?workspace=workspace-1") {
+        return new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: /happy birthday, nicole/i }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/nicole/workspaces/workspace-1");
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain(
+      "/api/todos?workspace=workspace-1",
+    );
+  });
+
+  it("switches from Todos to Nicole and updates the route", async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url === "/api/auth/session") {
+        return new Response(JSON.stringify(authenticatedSession()), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url === "/api/todos?workspace=workspace-1") {
+        return workspaceItemsResponse(
+          [
+            {
+              id: "1",
+              title: "Ship auth flow",
+              completed: false,
+              ownerEmail: "owner@example.com",
+              workspaceId: "workspace-1",
+            },
+          ],
+          "workspace-1",
+        );
+      }
+
+      if (url === "/api/shares?workspace=workspace-1") {
+        return new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText("Ship auth flow")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /open nicole app/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: /happy birthday, nicole/i }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/nicole/workspaces/workspace-1");
+  });
+
   it("forces a password reset before workspace data loads", async () => {
     fetchMock
       .mockResolvedValueOnce(

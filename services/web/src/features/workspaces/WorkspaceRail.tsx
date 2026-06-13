@@ -1,5 +1,6 @@
 import { FormEvent, MouseEvent, ReactElement } from "react";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import CelebrationRoundedIcon from "@mui/icons-material/CelebrationRounded";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import ChecklistRoundedIcon from "@mui/icons-material/ChecklistRounded";
@@ -22,6 +23,7 @@ import {
   Paper,
 } from "@mui/material";
 
+import { WORKSPACE_APPS, WorkspaceAppId } from "../../app/workspaceApps";
 import { WorkspaceAccess } from "../../app/types";
 import { AppButton, AppIconButton } from "../../components/ui";
 import { CollaboratorsPopover } from "./CollaboratorsPopover";
@@ -31,6 +33,7 @@ type WorkspaceRailProps = {
   currentUserEmail?: string;
   accessibleWorkspaces: WorkspaceAccess[];
   selectedWorkspace: string;
+  selectedAppId: WorkspaceAppId;
   currentWorkspace?: WorkspaceAccess;
   collaboratorCount: number;
   collaboratorMenuAnchorEl: HTMLElement | null;
@@ -44,6 +47,7 @@ type WorkspaceRailProps = {
   isWorkspaceSettingsOpen: boolean;
   isSidebarExpanded: boolean;
   onWorkspaceChange: (workspaceID: string) => void;
+  onAppChange: (appID: WorkspaceAppId) => void;
   onOpenCreateWorkspace: (anchorEl: HTMLElement) => void;
   onOpenCollaborators: (event: MouseEvent<HTMLElement>) => void;
   onCloseCollaborators: () => void;
@@ -59,6 +63,7 @@ export function WorkspaceRail({
   currentUserEmail,
   accessibleWorkspaces,
   selectedWorkspace,
+  selectedAppId,
   currentWorkspace,
   collaboratorCount,
   collaboratorMenuAnchorEl,
@@ -72,6 +77,7 @@ export function WorkspaceRail({
   isWorkspaceSettingsOpen,
   isSidebarExpanded,
   onWorkspaceChange,
+  onAppChange,
   onOpenCreateWorkspace,
   onOpenCollaborators,
   onCloseCollaborators,
@@ -93,16 +99,29 @@ export function WorkspaceRail({
     onWorkspaceChange(event.target.value);
   }
 
-  function renderAppButton(label: string, ariaLabel: string, icon: ReactElement) {
+  function renderAppIcon(appId: WorkspaceAppId) {
+    return appId === "nicole" ? <CelebrationRoundedIcon /> : <ChecklistRoundedIcon />;
+  }
+
+  function renderAppButton(
+    appId: WorkspaceAppId,
+    label: string,
+    ariaLabel: string,
+    icon: ReactElement,
+  ) {
+    const isActive = selectedAppId === appId;
+
     if (isSidebarExpanded) {
       return (
         <AppButton
+          key={appId}
           fullWidth
           variant="outlined"
           color="inherit"
           startIcon={icon}
           aria-label={ariaLabel}
-          className="workspace-sidebar-nav-button app-selector-item app-selector-item-active"
+          onClick={() => onAppChange(appId)}
+          className={`workspace-sidebar-nav-button app-selector-item${isActive ? " app-selector-item-active" : ""}`}
           sx={{ justifyContent: "flex-start" }}
         >
           {label}
@@ -111,14 +130,15 @@ export function WorkspaceRail({
     }
 
     return (
-      <Tooltip title={label} placement="right">
-        <AppIconButton
-          color="inherit"
-          aria-label={ariaLabel}
-          className="workspace-sidebar-icon-button workspace-sidebar-nav-icon app-selector-item app-selector-item-active"
-        >
-          {icon}
-        </AppIconButton>
+      <Tooltip key={appId} title={label} placement="right">
+          <AppIconButton
+            color="inherit"
+            aria-label={ariaLabel}
+            onClick={() => onAppChange(appId)}
+            className={`workspace-sidebar-icon-button workspace-sidebar-nav-icon app-selector-item${isActive ? " app-selector-item-active" : ""}`}
+          >
+            {icon}
+          </AppIconButton>
       </Tooltip>
     );
   }
@@ -276,7 +296,9 @@ export function WorkspaceRail({
         <Divider className="workspace-sidebar-divider" />
 
         <Stack spacing={1} className="workspace-sidebar-nav">
-          {renderAppButton("Todos", "Open todos app", <ChecklistRoundedIcon />)}
+          {WORKSPACE_APPS.map((app) =>
+            renderAppButton(app.id, app.label, app.ariaLabel, renderAppIcon(app.id)),
+          )}
         </Stack>
 
         <Box sx={{ flex: 1 }} />

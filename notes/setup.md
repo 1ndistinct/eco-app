@@ -44,12 +44,16 @@ Google-authenticated provisioned users still must complete the initial password 
 That first-login password setup only requires the new password because the authenticated session already proves identity.
 Default external routing uses one Traefik host with path-based endpoints:
 - local frontend: http://eco.localhost/
+- local nicole route: http://eco.localhost/nicole/workspaces/<workspace-id>
 - local backend: http://eco.localhost/api/healthz
+- local nicole remote entry: http://eco.localhost/nicole/remoteEntry.js
 The local-machine k3d environment default lives in `deploy/k3d/local.values.yaml`.
 Use `K3D_VALUES_FILE=./deploy/k3d/tm.values.yaml` on `tm` to deploy with:
 - frontend: http://192.168.1.84/
+- nicole route: http://192.168.1.84/nicole/workspaces/<workspace-id>
 - backend: http://192.168.1.84/api/healthz
 - alias: http://eco.treehousehl.com/
+- nicole remote entry: http://eco.treehousehl.com/nicole/remoteEntry.js
 Set `K3D_SECRETS_FILE=./deploy/k3d/tm.secrets.yaml` when you want `task helm:template`, `task deploy`, or `task deploy:docker` to layer those local-only values into the Helm release.
 For Google OAuth on `tm`, use `https://eco.treehousehl.com` as `GOOGLE_OAUTH_PUBLIC_BASE_URL`.
 Register `https://eco.treehousehl.com/api/auth/google/callback` as the Google OAuth redirect URI for that deployment.

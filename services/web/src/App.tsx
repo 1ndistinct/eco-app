@@ -19,7 +19,8 @@ import {
   WorkspaceAccess,
   WorkspaceShare,
 } from "./app/types";
-import { buildWorkspacePath, readWorkspaceIdFromPath } from "./app/workspaceRouting";
+import { DEFAULT_WORKSPACE_APP_ID, WorkspaceAppId } from "./app/workspaceApps";
+import { buildWorkspacePath, readWorkspaceLocationFromPath } from "./app/workspaceRouting";
 import { AuthShell } from "./features/auth/AuthShell";
 import { LoginView } from "./features/auth/LoginView";
 import { PasswordSetupView } from "./features/auth/PasswordSetupView";
@@ -53,18 +54,25 @@ function resetTransientWorkspaceState() {
 
 function readSelectedWorkspaceIdFromLocation() {
   if (typeof window === "undefined") {
-    return "";
+    return {
+      appId: DEFAULT_WORKSPACE_APP_ID,
+      workspaceId: "",
+    };
   }
 
-  return readWorkspaceIdFromPath(window.location.pathname);
+  return readWorkspaceLocationFromPath(window.location.pathname);
 }
 
-function updateWorkspaceLocation(workspaceId: string, mode: HistoryMode) {
+function updateWorkspaceLocation(
+  workspaceId: string,
+  appId: WorkspaceAppId,
+  mode: HistoryMode,
+) {
   if (typeof window === "undefined") {
     return;
   }
 
-  const nextPath = buildWorkspacePath(workspaceId);
+  const nextPath = buildWorkspacePath(workspaceId, appId);
 
   if (window.location.pathname === nextPath) {
     return;
@@ -82,6 +90,7 @@ function updateWorkspaceLocation(workspaceId: string, mode: HistoryMode) {
 }
 
 export default function App() {
+  const initialWorkspaceSelection = readSelectedWorkspaceIdFromLocation();
   const [sessionState, setSessionState] = useState<SessionState>(UNAUTHENTICATED_SESSION);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [loginEmail, setLoginEmail] = useState("");
@@ -91,8 +100,11 @@ export default function App() {
   const [resetNewPassword, setResetNewPassword] = useState("");
   const [resetError, setResetError] = useState<string | null>(null);
   const [isSubmittingPasswordReset, setIsSubmittingPasswordReset] = useState(false);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() =>
-    readSelectedWorkspaceIdFromLocation(),
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(
+    initialWorkspaceSelection.workspaceId,
+  );
+  const [selectedAppId, setSelectedAppId] = useState<WorkspaceAppId>(
+    initialWorkspaceSelection.appId,
   );
   const [isWorkspaceSettingsOpen, setIsWorkspaceSettingsOpen] = useState(false);
   const [isDesktopSidebarExpanded, setIsDesktopSidebarExpanded] = useState(false);
@@ -150,7 +162,9 @@ export default function App() {
     }
 
     function handlePopState() {
-      setSelectedWorkspaceId(readSelectedWorkspaceIdFromLocation());
+      const nextSelection = readSelectedWorkspaceIdFromLocation();
+      setSelectedWorkspaceId(nextSelection.workspaceId);
+      setSelectedAppId(nextSelection.appId);
       setIsWorkspaceSettingsOpen(false);
       setWorkspaceError(null);
       setShareEmail("");
@@ -195,7 +209,7 @@ export default function App() {
     setWorkspaceManageError(null);
     setDeletingWorkspaceId(null);
     setSelectedWorkspaceId("");
-    updateWorkspaceLocation("", "replace");
+    updateWorkspaceLocation("", selectedAppId, "replace");
     setLoginError(initialAuthError);
   }
 
@@ -251,16 +265,22 @@ export default function App() {
       if (selectedWorkspaceId !== "") {
         setSelectedWorkspaceId("");
       }
-      updateWorkspaceLocation("", "replace");
+      updateWorkspaceLocation("", selectedAppId, "replace");
       return;
     }
 
     if (!accessibleWorkspaces.some((workspace) => workspace.id === selectedWorkspaceId)) {
       const fallbackWorkspaceId = accessibleWorkspaces[0].id;
       setSelectedWorkspaceId(fallbackWorkspaceId);
-      updateWorkspaceLocation(fallbackWorkspaceId, "replace");
+      updateWorkspaceLocation(fallbackWorkspaceId, selectedAppId, "replace");
     }
-  }, [accessibleWorkspaces, isBootstrapping, selectedWorkspaceId, sessionState.authenticated]);
+  }, [
+    accessibleWorkspaces,
+    isBootstrapping,
+    selectedAppId,
+    selectedWorkspaceId,
+    sessionState.authenticated,
+  ]);
 
   useEffect(() => {
     if (
@@ -311,7 +331,7 @@ export default function App() {
 
   function handleWorkspaceChange(workspaceId: string) {
     setSelectedWorkspaceId(workspaceId);
-    updateWorkspaceLocation(workspaceId, "push");
+    updateWorkspaceLocation(workspaceId, selectedAppId, "push");
     setIsMobileAppDrawerOpen(false);
     setIsWorkspaceSettingsOpen(false);
     setWorkspaceError(null);
@@ -323,6 +343,13 @@ export default function App() {
     setCreateWorkspaceAnchorEl(null);
     setCreateWorkspaceError(null);
     setWorkspaceManageError(null);
+  }
+
+  function handleAppChange(appId: WorkspaceAppId) {
+    setSelectedAppId(appId);
+    updateWorkspaceLocation(selectedWorkspaceId, appId, "push");
+    setIsMobileAppDrawerOpen(false);
+    setIsWorkspaceSettingsOpen(false);
   }
 
   function handleOpenCreateWorkspace(anchorEl: HTMLElement) {
@@ -478,7 +505,7 @@ export default function App() {
         accessibleWorkspaces: [...(current.accessibleWorkspaces ?? []), createdWorkspace],
       }));
       setSelectedWorkspaceId(createdWorkspace.id);
-      updateWorkspaceLocation(createdWorkspace.id, "push");
+      updateWorkspaceLocation(createdWorkspace.id, selectedAppId, "push");
       setIsWorkspaceSettingsOpen(false);
       setWorkspaceSuccess(`Created ${createdWorkspace.name}.`);
       setCreateWorkspaceAnchorEl(null);
@@ -523,7 +550,7 @@ export default function App() {
       }));
       const nextWorkspaceId = nextWorkspaces[0]?.id ?? "";
       setSelectedWorkspaceId(nextWorkspaceId);
-      updateWorkspaceLocation(nextWorkspaceId, "replace");
+      updateWorkspaceLocation(nextWorkspaceId, selectedAppId, "replace");
       setIsWorkspaceSettingsOpen(false);
       setWorkspaceSuccess(`Deleted ${deletedWorkspace.name}.`);
       setCollaboratorMenuAnchorEl(null);
@@ -623,7 +650,7 @@ export default function App() {
         }));
         const nextWorkspaceId = nextWorkspaces[0]?.id ?? "";
         setSelectedWorkspaceId(nextWorkspaceId);
-        updateWorkspaceLocation(nextWorkspaceId, "replace");
+        updateWorkspaceLocation(nextWorkspaceId, selectedAppId, "replace");
         setCollaboratorMenuAnchorEl(null);
         setShares([]);
       }
@@ -718,6 +745,7 @@ export default function App() {
             currentUserEmail={sessionState.user?.email}
             accessibleWorkspaces={accessibleWorkspaces}
             selectedWorkspace={selectedWorkspaceId}
+            selectedAppId={selectedAppId}
             currentWorkspace={currentWorkspace}
             collaboratorCount={collaboratorEmails.length}
             collaboratorMenuAnchorEl={collaboratorMenuAnchorEl}
@@ -731,6 +759,7 @@ export default function App() {
             isWorkspaceSettingsOpen={isWorkspaceSettingsOpen}
             isSidebarExpanded={isDesktopSidebarExpanded}
             onWorkspaceChange={handleWorkspaceChange}
+            onAppChange={handleAppChange}
             onOpenCreateWorkspace={handleOpenCreateWorkspace}
             onOpenCollaborators={handleOpenCollaborators}
             onCloseCollaborators={handleCloseCollaborators}
@@ -748,6 +777,7 @@ export default function App() {
             currentUserEmail={sessionState.user?.email}
             accessibleWorkspaces={accessibleWorkspaces}
             selectedWorkspace={selectedWorkspaceId}
+            selectedAppId={selectedAppId}
             currentWorkspace={currentWorkspace}
             collaboratorCount={collaboratorEmails.length}
             collaboratorMenuAnchorEl={collaboratorMenuAnchorEl}
@@ -761,6 +791,8 @@ export default function App() {
             isWorkspaceSettingsOpen={isWorkspaceSettingsOpen}
             isSidebarExpanded={isMobileAppDrawerOpen}
             onWorkspaceChange={handleWorkspaceChange}
+            onAppChange={handleAppChange}
+            onCloseSidebar={() => setIsMobileAppDrawerOpen(false)}
             onOpenCreateWorkspace={handleOpenCreateWorkspace}
             onOpenCollaborators={handleOpenCollaborators}
             onCloseCollaborators={handleCloseCollaborators}
@@ -768,7 +800,6 @@ export default function App() {
             onShareWorkspace={handleShareWorkspace}
             onRemoveCollaborator={handleRemoveCollaborator}
             onToggleSidebar={() => setIsMobileAppDrawerOpen((current) => !current)}
-            onCloseSidebar={() => setIsMobileAppDrawerOpen(false)}
             onToggleSettings={() => setIsWorkspaceSettingsOpen((current) => !current)}
             onLogout={handleLogout}
           />
@@ -785,6 +816,7 @@ export default function App() {
                 <WorkspaceView
                   currentWorkspace={currentWorkspace}
                   currentUserEmail={sessionState.user?.email}
+                  selectedAppId={selectedAppId}
                 />
               </Box>
             </Stack>

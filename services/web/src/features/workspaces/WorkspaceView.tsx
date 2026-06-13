@@ -1,16 +1,20 @@
 import { Box, Paper, Stack, Typography } from "@mui/material";
 
+import { WorkspaceAppId } from "../../app/workspaceApps";
 import { WorkspaceAccess } from "../../app/types";
+import { BirthdayFeatureHost } from "../nicole/BirthdayFeatureHost";
 import { TodoFeatureHost } from "../todos/TodoFeatureHost";
 
 type WorkspaceViewProps = {
   currentWorkspace?: WorkspaceAccess;
   currentUserEmail?: string;
+  selectedAppId: WorkspaceAppId;
 };
 
 export function WorkspaceView({
   currentWorkspace,
   currentUserEmail,
+  selectedAppId,
 }: WorkspaceViewProps) {
   if (!currentWorkspace) {
     return (
@@ -35,11 +39,19 @@ export function WorkspaceView({
   return (
     <Box className="workspace-layout">
       <Stack spacing={2.5} className="workspace-main">
-        <TodoFeatureHost
-          workspaceId={currentWorkspace.id}
-          workspaceName={currentWorkspace.name}
-          currentUserEmail={currentUserEmail}
-        />
+        {selectedAppId === "nicole" ? (
+          <BirthdayFeatureHost
+            workspaceId={currentWorkspace.id}
+            workspaceName={currentWorkspace.name}
+            currentUserEmail={currentUserEmail}
+          />
+        ) : (
+          <TodoFeatureHost
+            workspaceId={currentWorkspace.id}
+            workspaceName={currentWorkspace.name}
+            currentUserEmail={currentUserEmail}
+          />
+        )}
       </Stack>
     </Box>
   );

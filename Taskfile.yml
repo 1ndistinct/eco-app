@@ -14,6 +14,7 @@ tasks:
     desc: Install frontend dependencies
     cmds:
       - pnpm --dir services/web install --no-frozen-lockfile
+      - pnpm --dir services/web-nicole install --no-frozen-lockfile
       - pnpm --dir services/web-todo install --no-frozen-lockfile
 
   k3d:bootstrap:
@@ -66,6 +67,7 @@ tasks:
     cmds:
       - task install
       - sh -c 'TZ=UTC pnpm --dir services/web test -- --run'
+      - sh -c 'TZ=UTC pnpm --dir services/web-nicole test -- --run'
       - sh -c 'TZ=UTC pnpm --dir services/web-todo test -- --run'
 
   test:
@@ -95,6 +97,7 @@ tasks:
     cmds:
       - task install
       - pnpm --dir services/web lint
+      - pnpm --dir services/web-nicole lint
       - pnpm --dir services/web-todo lint
 
   lint:
@@ -117,6 +120,7 @@ tasks:
     cmds:
       - task install
       - pnpm --dir services/web build
+      - pnpm --dir services/web-nicole build
       - pnpm --dir services/web-todo build
 
   build:
@@ -149,6 +153,14 @@ tasks:
         ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-web:${IMAGE_TAG:-dev}"; \
         docker build -f services/web/Dockerfile -t "$ref" .'
 
+  docker:build:web-nicole:
+    desc: Build the Nicole remote image with Docker
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-web-nicole:${IMAGE_TAG:-dev}"; \
+        docker build -f services/web-nicole/Dockerfile -t "$ref" .'
+
   docker:build:web-todo:
     desc: Build the todo remote image with Docker
     cmds:
@@ -163,6 +175,7 @@ tasks:
       - task docker:build:app
       - task docker:build:todo-api
       - task docker:build:web
+      - task docker:build:web-nicole
       - task docker:build:web-todo
 
   docker:push:app:
@@ -192,6 +205,15 @@ tasks:
         ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-web:${IMAGE_TAG:-dev}"; \
         docker push "$ref"'
 
+  docker:push:web-nicole:
+    desc: Build and push the Nicole remote image with Docker
+    cmds:
+      - task docker:build:web-nicole
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-localhost:5001}/echo-agentic-todo-postfix-20260411210213-web-nicole:${IMAGE_TAG:-dev}"; \
+        docker push "$ref"'
+
   docker:push:web-todo:
     desc: Build and push the todo remote image with Docker
     cmds:
@@ -207,6 +229,7 @@ tasks:
       - task docker:push:app
       - task docker:push:todo-api
       - task docker:push:web
+      - task docker:push:web-nicole
       - task docker:push:web-todo
 
   image:app:
@@ -246,6 +269,19 @@ tasks:
           --local context=. \
           --local dockerfile=. \
           --opt filename=services/web/Dockerfile \
+          --output type=image,name="$ref",push=true,registry.insecure=true'
+
+  image:web-nicole:
+    desc: Build and push the Nicole remote image with BuildKit
+    cmds:
+      - |
+        sh -c 'set -eu; \
+        ref="${PUSH_REGISTRY:-k3d-echo-registry.localhost:5000}/echo-agentic-todo-postfix-20260411210213-web-nicole:${IMAGE_TAG:-dev}"; \
+        buildctl-daemonless.sh build \
+          --frontend dockerfile.v0 \
+          --local context=. \
+          --local dockerfile=. \
+          --opt filename=services/web-nicole/Dockerfile \
           --output type=image,name="$ref",push=true,registry.insecure=true'
 
   image:web-todo:
@@ -288,6 +324,8 @@ tasks:
           --set-string images.todoApi.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
           --set-string images.web.tag="$tag" \
+          --set-string images.webNicole.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-nicole" \
+          --set-string images.webNicole.tag="$tag" \
           --set-string images.webTodo.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-todo" \
           --set-string images.webTodo.tag="$tag"'
 
@@ -297,6 +335,7 @@ tasks:
       - task image:app
       - task image:todo-api
       - task image:web
+      - task image:web-nicole
       - task image:web-todo
       - |
         sh -c 'set -eu; \
@@ -324,15 +363,19 @@ tasks:
           --set-string images.todoApi.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
           --set-string images.web.tag="$tag" \
+          --set-string images.webNicole.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-nicole" \
+          --set-string images.webNicole.tag="$tag" \
           --set-string images.webTodo.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-todo" \
           --set-string images.webTodo.tag="$tag"; \
         kubectl rollout restart deployment/"$release-app" -n "$ns"; \
         kubectl rollout restart deployment/"$release-todo-api" -n "$ns"; \
         kubectl rollout restart deployment/"$release-web" -n "$ns"; \
+        kubectl rollout restart deployment/"$release-web-nicole" -n "$ns"; \
         kubectl rollout restart deployment/"$release-web-todo" -n "$ns"; \
         kubectl rollout status deployment/"$release-app" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-todo-api" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
+        kubectl rollout status deployment/"$release-web-nicole" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-web-todo" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
 
   deploy:docker:
@@ -341,6 +384,7 @@ tasks:
       - task docker:push:app
       - task docker:push:todo-api
       - task docker:push:web
+      - task docker:push:web-nicole
       - task docker:push:web-todo
       - |
         sh -c 'set -eu; \
@@ -368,15 +412,19 @@ tasks:
           --set-string images.todoApi.tag="$tag" \
           --set-string images.web.repository="$registry/echo-agentic-todo-postfix-20260411210213-web" \
           --set-string images.web.tag="$tag" \
+          --set-string images.webNicole.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-nicole" \
+          --set-string images.webNicole.tag="$tag" \
           --set-string images.webTodo.repository="$registry/echo-agentic-todo-postfix-20260411210213-web-todo" \
           --set-string images.webTodo.tag="$tag"; \
         kubectl rollout restart deployment/"$release-app" -n "$ns"; \
         kubectl rollout restart deployment/"$release-todo-api" -n "$ns"; \
         kubectl rollout restart deployment/"$release-web" -n "$ns"; \
+        kubectl rollout restart deployment/"$release-web-nicole" -n "$ns"; \
         kubectl rollout restart deployment/"$release-web-todo" -n "$ns"; \
         kubectl rollout status deployment/"$release-app" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-todo-api" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-web" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
+        kubectl rollout status deployment/"$release-web-nicole" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"; \
         kubectl rollout status deployment/"$release-web-todo" -n "$ns" --timeout="${DEPLOY_TIMEOUT:-5m}"'
 
   deploy:docker:tm:
@@ -439,7 +487,7 @@ tasks:
         values_file="${K3D_VALUES_FILE:-./deploy/k3d/local.values.yaml}"; \
         default_host="$(awk '\''/^ingress:/{in_ingress=1; next} in_ingress && /^[^[:space:]]/{in_ingress=0} in_ingress && $1 == "host:" { print $2; exit } in_ingress && $1 == "-" { print $2; exit }'\'' "$values_file")"; \
         host="${INGRESS_HOST:-${default_host:-$release.localhost}}"; \
-        printf "frontend: http://%s/\ntodo route: http://%s/todo/\nshell backend: http://%s/api/healthz\ntodo api: http://%s/api/todos\nremote entry: http://%s/todo/remoteEntry.js\n" "$host" "$host" "$host" "$host" "$host"'
+        printf "frontend: http://%s/\nnicole route: http://%s/nicole/workspaces/<workspace-id>\ntodo route: http://%s/todo/workspaces/<workspace-id>\nshell backend: http://%s/api/healthz\ntodo api: http://%s/api/todos\nnicole remote entry: http://%s/nicole/remoteEntry.js\ntodo remote entry: http://%s/todo/remoteEntry.js\n" "$host" "$host" "$host" "$host" "$host" "$host" "$host"'
 
   logs:
     desc: "Stream deployment logs (for example: task logs -- web)"

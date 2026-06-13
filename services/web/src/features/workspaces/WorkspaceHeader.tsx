@@ -1,5 +1,6 @@
 import { FormEvent, MouseEvent, useState } from "react";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import CelebrationRoundedIcon from "@mui/icons-material/CelebrationRounded";
 import ChecklistRoundedIcon from "@mui/icons-material/ChecklistRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
@@ -7,8 +8,19 @@ import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import WorkspacesRoundedIcon from "@mui/icons-material/WorkspacesRounded";
-import { Badge, Box, Drawer, Paper, Stack, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
+import {
+  Badge,
+  Box,
+  Drawer,
+  Paper,
+  Stack,
+  Tooltip,
+  Typography,
+  useMediaQuery,
+  useTheme,
+} from "@mui/material";
 
+import { WORKSPACE_APPS, WorkspaceAppId } from "../../app/workspaceApps";
 import { WorkspaceAccess } from "../../app/types";
 import { AppButton, AppIconButton, PopoverSurface } from "../../components/ui";
 import { CollaboratorsPopover } from "./CollaboratorsPopover";
@@ -18,6 +30,7 @@ type WorkspaceHeaderProps = {
   currentUserEmail?: string;
   accessibleWorkspaces: WorkspaceAccess[];
   selectedWorkspace: string;
+  selectedAppId: WorkspaceAppId;
   currentWorkspace?: WorkspaceAccess;
   collaboratorCount: number;
   collaboratorMenuAnchorEl: HTMLElement | null;
@@ -31,6 +44,7 @@ type WorkspaceHeaderProps = {
   isWorkspaceSettingsOpen: boolean;
   isSidebarExpanded: boolean;
   onWorkspaceChange: (workspaceID: string) => void;
+  onAppChange: (appID: WorkspaceAppId) => void;
   onCloseSidebar: () => void;
   onOpenCreateWorkspace: (anchorEl: HTMLElement) => void;
   onOpenCollaborators: (event: MouseEvent<HTMLElement>) => void;
@@ -47,6 +61,7 @@ export function WorkspaceHeader({
   currentUserEmail,
   accessibleWorkspaces,
   selectedWorkspace,
+  selectedAppId,
   currentWorkspace,
   collaboratorCount,
   collaboratorMenuAnchorEl,
@@ -60,6 +75,7 @@ export function WorkspaceHeader({
   isWorkspaceSettingsOpen,
   isSidebarExpanded,
   onWorkspaceChange,
+  onAppChange,
   onCloseSidebar,
   onOpenCreateWorkspace,
   onOpenCollaborators,
@@ -77,6 +93,10 @@ export function WorkspaceHeader({
 
   if (!isMobile) {
     return null;
+  }
+
+  function renderAppIcon(appId: WorkspaceAppId) {
+    return appId === "nicole" ? <CelebrationRoundedIcon /> : <ChecklistRoundedIcon />;
   }
 
   function handleWorkspaceSelection(workspaceId: string) {
@@ -101,6 +121,11 @@ export function WorkspaceHeader({
   function handleOpenSidebar() {
     setWorkspaceMenuAnchorEl(null);
     onToggleSidebar();
+  }
+
+  function handleAppSelection(appId: WorkspaceAppId) {
+    onAppChange(appId);
+    onCloseSidebar();
   }
 
   function handleCloseMobileSidebar() {
@@ -239,17 +264,29 @@ export function WorkspaceHeader({
               Apps
             </Typography>
             <Stack spacing={0.75} className="app-selector">
-              <AppButton
-                fullWidth
-                variant="outlined"
-                color="inherit"
-                startIcon={<ChecklistRoundedIcon />}
-                className="workspace-mobile-workspace-button app-selector-item app-selector-item-active"
-                onClick={handleCloseMobileSidebar}
-                sx={{ justifyContent: "flex-start", px: 1.25, py: 1.125, textTransform: "none" }}
-              >
-                Todos
-              </AppButton>
+              {WORKSPACE_APPS.map((app) => {
+                const isActive = selectedAppId === app.id;
+
+                return (
+                  <AppButton
+                    key={app.id}
+                    fullWidth
+                    variant="outlined"
+                    color="inherit"
+                    startIcon={renderAppIcon(app.id)}
+                    className={`workspace-mobile-workspace-button app-selector-item${isActive ? " app-selector-item-active" : ""}`}
+                    onClick={() => handleAppSelection(app.id)}
+                    sx={{
+                      justifyContent: "flex-start",
+                      px: 1.25,
+                      py: 1.125,
+                      textTransform: "none",
+                    }}
+                  >
+                    {app.label}
+                  </AppButton>
+                );
+              })}
             </Stack>
           </Stack>
 

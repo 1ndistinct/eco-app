@@ -7,6 +7,7 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig(() => {
   const isTest = process.env.VITEST === "true";
   const todoRemoteEntry = process.env.VITE_TODO_REMOTE_ENTRY ?? "/todo/remoteEntry.js";
+  const nicoleRemoteEntry = process.env.VITE_NICOLE_REMOTE_ENTRY ?? "/nicole/remoteEntry.js";
 
   return {
     plugins: [
@@ -20,6 +21,11 @@ export default defineConfig(() => {
               type: "module",
               name: "todoApp",
               entry: todoRemoteEntry,
+            },
+            nicoleApp: {
+              type: "module",
+              name: "nicoleApp",
+              entry: nicoleRemoteEntry,
             },
           },
           shared: {
@@ -87,6 +93,9 @@ export default defineConfig(() => {
             "todoApp/TodoFeature": fileURLToPath(
               new URL("../web-todo/src/exposed/TodoFeature.tsx", import.meta.url),
             ),
+            "nicoleApp/BirthdayFeature": fileURLToPath(
+              new URL("../web-nicole/src/exposed/BirthdayFeature.tsx", import.meta.url),
+            ),
           }
         : undefined,
     },
@@ -101,6 +110,14 @@ export default defineConfig(() => {
         },
         "/todo/assets": {
           target: process.env.VITE_TODO_DEV_SERVER ?? "http://127.0.0.1:4174",
+          changeOrigin: true,
+        },
+        "/nicole/remoteEntry.js": {
+          target: process.env.VITE_NICOLE_DEV_SERVER ?? "http://127.0.0.1:4175",
+          changeOrigin: true,
+        },
+        "/nicole/assets": {
+          target: process.env.VITE_NICOLE_DEV_SERVER ?? "http://127.0.0.1:4175",
           changeOrigin: true,
         },
       },

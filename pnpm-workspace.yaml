@@ -1,3 +1,4 @@
 packages:
   - services/web
+  - services/web-nicole
   - services/web-todo

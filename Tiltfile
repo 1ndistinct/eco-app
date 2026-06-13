@@ -5,6 +5,8 @@ watch_settings(
     "node_modules",
     "services/web/node_modules",
     "services/web/dist",
+    "services/web-nicole/node_modules",
+    "services/web-nicole/dist",
     "services/web-todo/node_modules",
     "services/web-todo/dist",
   ],
@@ -19,6 +21,7 @@ deploy_deps = [
   "services/app-shell",
   "services/app-todo",
   "services/web",
+  "services/web-nicole",
   "services/web-todo",
 ]
 
@@ -114,6 +117,14 @@ local_resource(
 local_resource(
   "logs-web",
   "task logs -- web",
+  trigger_mode=TRIGGER_MODE_MANUAL,
+  auto_init=False,
+  allow_parallel=True,
+)
+
+local_resource(
+  "logs-web-nicole",
+  "task logs -- web-nicole",
   trigger_mode=TRIGGER_MODE_MANUAL,
   auto_init=False,
   allow_parallel=True,
