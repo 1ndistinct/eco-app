@@ -51,16 +51,16 @@ export default defineConfig(() => {
           injectRegister: "script",
           registerType: "autoUpdate",
           includeAssets: [
-            "favicon.svg",
-            "favicon.png",
-            "favicon-32x32.png",
-            "apple-touch-icon.png",
+            "frankicon-32x32.png",
+            "frankicon-180x180.png",
+            "frankicon-192x192.png",
+            "frankicon-512x512.png",
           ],
           manifest: {
             id: "/",
-            name: "Eco Todo Studio",
-            short_name: "Eco",
-            description: "Collaborative workspace todos in an installable app shell.",
+            name: "Frank",
+            short_name: "Frank",
+            description: "Frank, the collaborative workspace app shell.",
             theme_color: "#f8fbff",
             background_color: "#f8fbff",
             display: "standalone",
@@ -69,12 +69,12 @@ export default defineConfig(() => {
             categories: ["productivity", "business"],
             icons: [
               {
-                src: "pwa-192x192.png",
+                src: "frankicon-192x192.png",
                 sizes: "192x192",
                 type: "image/png",
               },
               {
-                src: "pwa-512x512.png",
+                src: "frankicon-512x512.png",
                 sizes: "512x512",
                 type: "image/png",
               },

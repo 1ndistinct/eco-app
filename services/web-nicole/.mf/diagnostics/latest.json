@@ -1,10 +1,10 @@
 {
   "latestErrorEvent": {
     "code": "TYPE-001",
-    "message": "Failed to generate type declaration. Execute the below cmd to reproduce and fix the error. #TYPE-001\nargs: {\"cmd\":\"npx tsc --project /Users/ciaran.mckey/repos/eco-app/services/web-nicole/node_modules/.federation/tsconfig.9b63c8580b97f3dcce69be99311650cd.json\"}\nView the docs to see how to solve: https://module-federation.io/guide/troubleshooting/type#type-001",
+    "message": "Failed to generate type declaration. Execute the below cmd to reproduce and fix the error. #TYPE-001\nargs: {\"cmd\":\"npx tsc --project /Users/ciaran.mckey/repos/eco-app/services/web-nicole/node_modules/.federation/tsconfig.be035a0a19850b262cc24ae4e0bd86ef.json\"}\nView the docs to see how to solve: https://module-federation.io/guide/troubleshooting/type#type-001",
     "args": {
-      "cmd": "npx tsc --project /Users/ciaran.mckey/repos/eco-app/services/web-nicole/node_modules/.federation/tsconfig.9b63c8580b97f3dcce69be99311650cd.json"
+      "cmd": "npx tsc --project /Users/ciaran.mckey/repos/eco-app/services/web-nicole/node_modules/.federation/tsconfig.be035a0a19850b262cc24ae4e0bd86ef.json"
     },
-    "timestamp": 1781345857762
+    "timestamp": 1781366199350
   }
 }

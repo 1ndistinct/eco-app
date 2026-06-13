@@ -4,8 +4,8 @@ import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import { Box, Stack } from "@mui/material";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
+import entryPhoto from "../assets/IMG_6615.jpg";
 import birthdayTrack from "../assets/audio/Arabella.mp3";
-import entryPhoto from "../assets/library/IMG_6615.jpg";
 import { featuredPhotoIds, photoLibrary, type PhotoLibraryItem } from "../data";
 import "./birthdayFeature.css";
 
@@ -213,12 +213,12 @@ export default function BirthdayFeature(_props: BirthdayFeatureProps) {
             </div>
             <button
               type="button"
-              className="nicole-secondary-button"
+              className="nicole-icon-button"
               aria-label="Shuffle photos"
+              title="Shuffle photos"
               onClick={handleShufflePhotos}
             >
               <AutorenewRoundedIcon fontSize="small" />
-              New set
             </button>
           </div>
 

@@ -212,7 +212,12 @@ export function WorkspaceRail({
                 renderValue={() => (
                   <Box className="workspace-sidebar-namespace-value">
                     <Box className="workspace-sidebar-logo-tile">
-                      <Box component="img" src="/logo.svg" alt="Eco" className="workspace-sidebar-logo" />
+                      <Box
+                        component="img"
+                        src="/logo.png"
+                        alt="Frank"
+                        className="workspace-sidebar-logo"
+                      />
                     </Box>
 
                     <Stack spacing={0.125} className="workspace-sidebar-namespace-copy">

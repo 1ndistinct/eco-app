@@ -244,7 +244,7 @@ export function WorkspaceHeader({
           <Box className="workspace-mobile-drawer-header">
             <Stack spacing={0.375}>
               <Typography variant="overline" className="workspace-mobile-topbar-kicker">
-                Eco
+                Frank
               </Typography>
               <Typography variant="h5">Menu</Typography>
             </Stack>
