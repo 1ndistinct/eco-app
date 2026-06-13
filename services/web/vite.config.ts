@@ -10,6 +10,7 @@ export default defineConfig(() => {
   const nicoleRemoteEntry = process.env.VITE_NICOLE_REMOTE_ENTRY ?? "/nicole/remoteEntry.js";
 
   return {
+    assetsInclude: ["**/*.JPG", "**/*.JPEG", "**/*.PNG", "**/*.WEBP"],
     plugins: [
       react(),
       !isTest &&
