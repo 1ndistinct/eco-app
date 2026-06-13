@@ -1,5 +1,48 @@
 import { SessionState, WorkspaceAccess } from "./types";
 
+function preferWorkspaceAccess(current: WorkspaceAccess | undefined, next: WorkspaceAccess) {
+  if (!current) {
+    return next;
+  }
+
+  if (current.role === "owner") {
+    return current;
+  }
+
+  return next.role === "owner" ? next : current;
+}
+
+function normalizeAccessibleWorkspaces(data: Partial<SessionState>) {
+  if (!Array.isArray(data.accessibleWorkspaces)) {
+    return [];
+  }
+
+  const workspaceByID = new Map<string, WorkspaceAccess>();
+  const workspaceIDs: string[] = [];
+
+  for (const workspace of data.accessibleWorkspaces) {
+    const normalizedWorkspace = normalizeWorkspaceAccess(workspace);
+
+    if (!normalizedWorkspace) {
+      continue;
+    }
+
+    if (!workspaceByID.has(normalizedWorkspace.id)) {
+      workspaceIDs.push(normalizedWorkspace.id);
+    }
+
+    workspaceByID.set(
+      normalizedWorkspace.id,
+      preferWorkspaceAccess(workspaceByID.get(normalizedWorkspace.id), normalizedWorkspace),
+    );
+  }
+
+  return workspaceIDs.flatMap((workspaceID) => {
+    const workspace = workspaceByID.get(workspaceID);
+    return workspace ? [workspace] : [];
+  });
+}
+
 export function normalizeWorkspaceAccess(
   workspace: Partial<WorkspaceAccess>,
 ): WorkspaceAccess | null {
@@ -28,11 +71,7 @@ export function normalizeSessionState(data: Partial<SessionState>): SessionState
     googleLoginEnabled: data.googleLoginEnabled === true,
     googleLoginURL: data.googleLoginURL ?? "",
     user: data.user,
-    accessibleWorkspaces: Array.isArray(data.accessibleWorkspaces)
-      ? data.accessibleWorkspaces
-          .map((workspace) => normalizeWorkspaceAccess(workspace))
-          .filter((workspace): workspace is WorkspaceAccess => workspace !== null)
-      : [],
+    accessibleWorkspaces: normalizeAccessibleWorkspaces(data),
   };
 }
 

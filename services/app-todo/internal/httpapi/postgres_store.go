@@ -198,6 +198,7 @@ func (s *PostgresStore) ListAccessibleWorkspaces(ctx context.Context, userEmail 
 			FROM workspaces
 			JOIN workspace_memberships ON workspace_memberships.workspace_id = workspaces.id
 			WHERE workspace_memberships.user_email = $1
+			  AND workspaces.owner_email <> $1
 		) AS accessible_workspaces
 		ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END, owner_email ASC, name ASC, id ASC
 	`, normalizeEmail(userEmail)); err != nil {
